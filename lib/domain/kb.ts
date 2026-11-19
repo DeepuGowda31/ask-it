@@ -1,0 +1,485 @@
+// Guided fixes for common L1 issues, written for a MacBook on macOS 15. One spoken sentence per step.
+
+interface Step {
+  text: string;
+  check: string;
+}
+
+export interface Article {
+  id: string;
+  title: string;
+  // Service key in services.ts, when the issue maps to one.
+  service: string | null;
+  // ServiceNow incident category for tickets raised from this guide.
+  category: string;
+  // A request that ends in a ticket, such as new software, hardware or access.
+  request?: true;
+  keywords: string;
+  steps: Step[];
+}
+
+export const ARTICLES: Article[] = [
+  {
+    id: 'vpn',
+    title: "VPN won't connect or keeps dropping in GlobalProtect",
+    service: 'vpn',
+    category: 'network',
+    keywords: 'vpn globalprotect connect connecting disconnect disconnecting dropping drops tunnel portal remote',
+    steps: [
+      { text: 'Click the GlobalProtect globe in the menu bar, choose Disconnect, wait ten seconds, then choose Connect.', check: 'Does it say Connected now?' },
+      { text: 'Open GlobalProtect settings and check that the portal is vpn dot nimbuslabs dot example.', check: 'Is that the portal you see?' },
+      { text: 'Turn Wi-Fi off and on from the menu bar, then connect GlobalProtect again.', check: 'Does the VPN stay connected for a minute?' },
+      { text: 'Quit GlobalProtect from its menu bar icon, open it again from Applications, and sign in.', check: 'Is it connected now?' },
+      { text: 'Restart the laptop, then connect GlobalProtect before opening other apps.', check: 'Does the VPN connect and stay up?' },
+    ],
+  },
+  {
+    id: 'wifi',
+    title: 'Office Wi-Fi not connecting',
+    service: 'wifi',
+    category: 'network',
+    keywords: 'wifi wireless internet network office corp connect signal',
+    steps: [
+      { text: 'Click the Wi-Fi icon in the menu bar and check that you are on Nimbus-Corp, not Nimbus-Guest.', check: 'Are you on Nimbus-Corp?' },
+      { text: 'Turn Wi-Fi off, wait five seconds, and turn it back on.', check: 'Does a web page load now?' },
+      { text: 'In System Settings, Wi-Fi, open the details for Nimbus-Corp, choose Forget This Network, then join it again with your Nimbus login.', check: 'Are you connected now?' },
+      { text: 'Move closer to a meeting room or another floor to rule out a weak signal.', check: 'Does it work there?' },
+    ],
+  },
+  {
+    id: 'outlook',
+    title: 'Outlook not syncing email or calendar',
+    service: 'outlook',
+    category: 'software',
+    keywords: 'outlook email mail inbox calendar sync syncing exchange new messages',
+    steps: [
+      { text: 'Look at the bottom of the Outlook window, and if it says Working Offline, turn Work Offline off in the Outlook menu.', check: 'Do new emails come in now?' },
+      { text: 'Quit Outlook fully with Command Q and open it again.', check: 'Is it syncing now?' },
+      { text: 'Open outlook dot office dot com in your browser and check whether the missing mail is there.', check: 'Do you see the new mail in the browser?' },
+      { text: 'In Outlook settings, open Accounts, remove your Nimbus account and add it again.', check: 'Has everything synced now?' },
+    ],
+  },
+  {
+    id: 'password',
+    title: 'Password expired or account locked out',
+    service: null,
+    category: 'inquiry',
+    keywords: 'password expired locked lockout locked out sign in login account reset unlock',
+    steps: [
+      { text: 'Make sure Caps Lock is off and that you sign in as priya dot sharma.', check: 'Does sign-in work now?' },
+      { text: 'I can unlock your account or send a reset link myself once you read me a six-digit code from your work email.', check: 'Shall I send the code now?' },
+      { text: 'After the unlock or reset, sign in at login dot nimbuslabs dot example.', check: 'Can you sign in now?' },
+      { text: 'If macOS asks for your old keychain password, choose Update Keychain Password and enter the old one.', check: 'Have the password prompts stopped?' },
+    ],
+  },
+  {
+    id: 'mfa-new-phone',
+    title: 'New phone: set up the authenticator app',
+    service: null,
+    category: 'inquiry',
+    keywords: 'mfa authenticator guardian new phone two factor 2fa otp enrol enroll',
+    steps: [
+      { text: 'Install the Auth0 Guardian app from the App Store or Play Store on the new phone.', check: 'Is it installed?' },
+      { text: 'If the old phone still works, sign in at login dot nimbuslabs dot example and add the new phone under your security settings.', check: 'Did the new phone get added?' },
+      { text: 'If the old phone is gone, I can reset your MFA after verifying you with an email code, and you enrol the new phone at your next sign-in.', check: 'Do you still have the old phone?' },
+    ],
+  },
+  {
+    id: 'printer',
+    title: "Can't print to an office printer",
+    service: 'printers',
+    category: 'hardware',
+    keywords: 'printer print printing printers paper jam queue',
+    steps: [
+      { text: 'Check the printer screen for a paper jam, empty tray or error message.', check: 'Is the printer showing an error?' },
+      { text: 'In System Settings, Printers and Scanners, make sure the floor printer is selected and not paused.', check: 'Does it print now?' },
+      { text: 'Remove the printer with the minus button, then add it again with the plus button.', check: 'Does a test page print?' },
+      { text: 'Open the Self Service app and install the Nimbus Print package.', check: 'Can you print now?' },
+    ],
+  },
+  {
+    id: 'slow-laptop',
+    title: 'Laptop running slow',
+    service: null,
+    category: 'hardware',
+    keywords: 'slow laptop mac macbook performance sluggish lag laggy',
+    steps: [
+      { text: 'Open Activity Monitor, sort by CPU, and quit any app you do not need that is using a lot.', check: 'Is it faster now?' },
+      { text: 'Restart the laptop, since a restart clears memory after a few days of uptime.', check: 'Is it better after the restart?' },
+      { text: 'Open System Settings, General, Software Update, and install any pending macOS update.', check: 'Is it running better now?' },
+      { text: 'Check System Settings, General, Storage, and tell me if less than ten percent is free.', check: 'Is less than ten percent free?' },
+    ],
+  },
+  {
+    id: 'meeting-audio',
+    title: 'Zoom or Teams audio not working',
+    service: null,
+    category: 'software',
+    keywords: 'zoom teams audio microphone mic speaker headset sound hear nobody meeting call',
+    steps: [
+      { text: 'In the meeting, open the audio settings and pick the right microphone and speaker.', check: 'Can they hear you now?' },
+      { text: 'In System Settings, Privacy and Security, Microphone, make sure Zoom or Teams is switched on.', check: 'Does the microphone work now?' },
+      { text: 'Unplug the headset and plug it back in, or switch to the built-in speakers to test.', check: 'Is the sound working now?' },
+      { text: 'Quit the meeting app fully with Command Q and join the meeting again.', check: 'Is the audio working now?' },
+    ],
+  },
+  {
+    id: 'software-request',
+    title: 'Install or request software',
+    service: null,
+    category: 'software',
+    request: true,
+    keywords: 'install installed installing software app application licence license request tableau download adobe acrobat visual studio code',
+    steps: [
+      { text: 'Open the Self Service app from Applications and search for the software.', check: 'Is it listed there?' },
+      { text: 'Click Install and wait for it to finish.', check: 'Did it install?' },
+      { text: 'If it is not in Self Service, I will raise a request with the software name and the business reason.', check: 'Shall I raise that request now?' },
+    ],
+  },
+  {
+    id: 'disk-full',
+    title: 'Disk full or low storage',
+    service: null,
+    category: 'hardware',
+    keywords: 'disk full storage space low hard drive startup almost',
+    steps: [
+      { text: 'Open System Settings, General, Storage, to see what uses the most space.', check: 'Can you see what uses the most space?' },
+      { text: 'Empty the Trash and clear old files from Downloads.', check: 'Is there more free space now?' },
+      { text: 'In Finder, right-click your OneDrive folder and choose Free Up Space to keep those files online only.', check: 'Has the free space gone up?' },
+      { text: 'Restart the laptop to clear temporary system files.', check: 'Is the low storage warning gone?' },
+    ],
+  },
+  {
+    id: 'dns-captive-portal',
+    title: "Websites won't load on Wi-Fi, or the hotel login page won't appear",
+    service: null,
+    category: 'network',
+    keywords: 'websites website pages load loading dns captive portal hotel airport cafe guest login page connected show',
+    steps: [
+      { text: 'Disconnect GlobalProtect from its menu bar icon for a moment, because the VPN can block a hotel or airport login page.', check: 'Is the VPN disconnected now?' },
+      { text: 'Open Safari and go to captive dot apple dot com, which makes the Wi-Fi login page appear.', check: 'Did a login page appear?' },
+      { text: 'Accept the terms or sign in on that page, then connect GlobalProtect again.', check: 'Do websites load now?' },
+      { text: 'In System Settings, Wi-Fi, open Details for this network, choose Forget This Network, and join it again.', check: 'Do websites load after joining again?' },
+      { text: 'Restart the laptop, because a restart clears a stuck network or DNS cache.', check: 'Do pages load after the restart?' },
+    ],
+  },
+  {
+    id: 'password-change',
+    title: 'Change your password before it expires',
+    service: null,
+    category: 'inquiry',
+    keywords: 'password change changing expire expires expiring expiry days reminder new',
+    steps: [
+      { text: 'Make sure you are in the office or connected to GlobalProtect before you change it.', check: 'Are you connected?' },
+      { text: 'Go to login dot nimbuslabs dot example, sign in, and choose Change Password in your profile.', check: 'Do you see the change password form?' },
+      { text: 'Enter your current password, then a new one of at least twelve characters that you have not used before.', check: 'Did it accept the new password?' },
+      { text: 'If macOS asks for your old keychain password, choose Update Keychain Password and enter the old one.', check: 'Have the password prompts stopped?' },
+      { text: 'Sign in again to Outlook, Teams and Slack with the new password when they ask.', check: 'Is everything signed in again?' },
+    ],
+  },
+  {
+    id: 'sso-loop',
+    title: 'Single sign-on keeps looping back to the sign-in page',
+    service: null,
+    category: 'inquiry',
+    keywords: 'sso single sign signin loop looping loops redirect redirecting page browser microsoft',
+    steps: [
+      { text: 'Open a private window in your browser with Shift Command N and sign in there.', check: 'Does sign-in work in the private window?' },
+      { text: 'In System Settings, General, Date and Time, make sure Set time and date automatically is on, because a wrong clock breaks sign-in.', check: 'Is the time set automatically?' },
+      { text: 'Clear the cookies for the sign-in site in your browser settings and try again.', check: 'Does it stop looping now?' },
+      { text: 'Try a different browser, such as Chrome if you were using Safari.', check: 'Can you sign in there?' },
+    ],
+  },
+  {
+    id: 'outlook-send-receive',
+    title: 'Emails stuck in the Outbox or not sending',
+    service: 'outlook',
+    category: 'software',
+    keywords: 'outbox stuck send sending sent receive receiving bounce bounced undeliverable attachment large email',
+    steps: [
+      { text: 'Look at the bottom of the Outlook window, and if it says Working Offline, turn Work Offline off in the Outlook menu.', check: 'Did the email leave the Outbox?' },
+      { text: 'Open the Outbox and check whether the stuck email has an attachment bigger than twenty megabytes.', check: 'Is the attachment that large?' },
+      { text: 'If it is that large, delete the email from the Outbox and send the file as a OneDrive link instead.', check: 'Did the email send?' },
+      { text: 'Quit Outlook fully with Command Q, open it again, and send a short test email to yourself.', check: 'Did the test email arrive?' },
+    ],
+  },
+  {
+    id: 'outlook-sharing',
+    title: "Share your calendar or open a colleague's calendar in Outlook",
+    service: 'outlook',
+    category: 'software',
+    keywords: 'calendar share sharing permission permissions colleague manager delegate assistant another person view',
+    steps: [
+      { text: 'In Outlook, open Calendar, right-click your calendar in the sidebar, and choose Sharing Permissions.', check: 'Do you see the permissions window?' },
+      { text: "Click Add, type your colleague's name, and choose what they can see, such as all details.", check: 'Did they get added?' },
+      { text: "To open someone else's calendar, choose File, Open, Other User's Folder, search for their name, and pick Calendar.", check: 'Can you see their calendar now?' },
+      { text: 'If it does not show on the Mac, check it in Outlook on the web at outlook dot office dot com.', check: 'Does it show up there?' },
+    ],
+  },
+  {
+    id: 'shared-mailbox',
+    title: 'Shared mailbox missing in Outlook',
+    service: 'outlook',
+    category: 'software',
+    keywords: 'shared mailbox mailboxes team inbox group missing disappeared gone',
+    steps: [
+      { text: 'Open outlook dot office dot com in your browser, click your profile picture, and choose Open another mailbox.', check: 'Does the shared mailbox open there?' },
+      { text: 'Quit Outlook on the Mac with Command Q and open it again, because a shared mailbox can take a restart to show up.', check: 'Is it back in the sidebar?' },
+      { text: 'Right-click your account in the Outlook sidebar and choose to add a shared folder or mailbox, then type its name.', check: 'Did it appear?' },
+      { text: 'If the web says you have no access, I will raise an access request naming the mailbox and who approves it.', check: 'Shall I raise that request?' },
+    ],
+  },
+  {
+    id: 'meeting-video',
+    title: 'Camera not working in Zoom or Teams',
+    service: null,
+    category: 'software',
+    keywords: 'camera video zoom teams meeting call black see me showing face',
+    steps: [
+      { text: 'In the meeting, open the video settings and pick the right camera, such as the built-in MacBook camera.', check: 'Can they see you now?' },
+      { text: 'In System Settings, Privacy and Security, Camera, make sure Zoom or Teams is switched on.', check: 'Is it switched on?' },
+      { text: 'Quit any other app that may be using the camera, such as FaceTime or Photo Booth, then turn your video on again.', check: 'Does the video work now?' },
+      { text: 'Quit the meeting app fully with Command Q and join the meeting again.', check: 'Is your video showing now?' },
+    ],
+  },
+  {
+    id: 'screen-sharing',
+    title: "Can't share your screen in Zoom, Teams or Slack",
+    service: null,
+    category: 'software',
+    keywords: 'screen share sharing present presenting recording permission zoom teams slack huddle window',
+    steps: [
+      { text: 'In System Settings, Privacy and Security, Screen and System Audio Recording, make sure the meeting app is switched on.', check: 'Is it switched on?' },
+      { text: 'Quit the meeting app with Command Q and open it again, because macOS applies the permission only after the app restarts.', check: 'Can you share your screen now?' },
+      { text: 'If macOS asks again whether the app may record your screen, choose Allow.', check: 'Does sharing work now?' },
+      { text: 'Try sharing a single window instead of the whole desktop.', check: 'Does sharing one window work?' },
+    ],
+  },
+  {
+    id: 'notifications',
+    title: 'Not getting Slack, Teams or Outlook notifications',
+    service: null,
+    category: 'software',
+    keywords: 'notifications notification alerts banners badges sound focus disturb missing slack teams outlook',
+    steps: [
+      { text: 'Click Control Center in the menu bar and check that Focus and Do Not Disturb are off.', check: 'Is Focus off?' },
+      { text: 'In System Settings, Notifications, select the app and make sure Allow notifications is on.', check: 'Is it on?' },
+      { text: 'Check the notification settings inside the app too, for example in Slack under Settings, Notifications.', check: 'Are they on there?' },
+      { text: 'Quit the app with Command Q, open it again, and ask a colleague to send you a test message.', check: 'Did a notification appear?' },
+    ],
+  },
+  {
+    id: 'external-monitor',
+    title: 'External monitor not detected or showing a black screen',
+    service: null,
+    category: 'hardware',
+    keywords: 'external monitor monitors display displays screen second detected detect black hdmi displayport plug plugged resolution',
+    steps: [
+      { text: 'Check that the monitor is switched on and set to the right input, such as HDMI or USB-C, with its own menu button.', check: 'Is it on the right input?' },
+      { text: 'Unplug the cable from the Mac and plug it in firmly again, or try the other port on the Mac.', check: 'Does the picture show now?' },
+      { text: 'In System Settings, Displays, hold the Option key and click Detect Displays.', check: 'Does the monitor appear now?' },
+      { text: 'Try a different cable or adapter, because a faulty adapter is the most common cause.', check: 'Does it work with the other cable?' },
+      { text: 'Restart the Mac with the monitor plugged in.', check: 'Is the monitor working after the restart?' },
+    ],
+  },
+  {
+    id: 'bluetooth',
+    title: 'Bluetooth keyboard, mouse or headphones not connecting',
+    service: null,
+    category: 'hardware',
+    keywords: 'bluetooth keyboard mouse trackpad headphones airpods pair pairing paired disconnecting disconnects magic',
+    steps: [
+      { text: 'Check that the device is charged, then switch it off and on again.', check: 'Is it on and charged?' },
+      { text: 'Click Control Center in the menu bar, turn Bluetooth off, wait five seconds, and turn it on again.', check: 'Does it connect now?' },
+      { text: 'In System Settings, Bluetooth, click the info button next to the device, choose Forget This Device, then pair it again.', check: 'Is it paired now?' },
+      { text: 'Keep the device close to the Mac and away from USB hubs, which can interfere with Bluetooth.', check: 'Does it stay connected?' },
+    ],
+  },
+  {
+    id: 'dock-usb-c',
+    title: 'Dock or USB-C hub not working',
+    service: null,
+    category: 'hardware',
+    keywords: 'dock docking station usb hub adapter dongle thunderbolt port ports peripherals',
+    steps: [
+      { text: 'Unplug the dock from the Mac, wait ten seconds, and plug it back in.', check: 'Do the devices work now?' },
+      { text: 'Check that the dock has its own power adapter plugged in and its light is on.', check: 'Is the dock powered?' },
+      { text: 'If macOS asks whether to allow the accessory to connect, choose Allow.', check: 'Did you allow it?' },
+      { text: 'Try the dock in another USB-C port on the Mac.', check: 'Does it work in the other port?' },
+      { text: 'Restart the Mac with the dock connected.', check: 'Is everything working after the restart?' },
+    ],
+  },
+  {
+    id: 'external-webcam',
+    title: 'External webcam not detected',
+    service: null,
+    category: 'hardware',
+    keywords: 'external webcam usb camera logitech detected detect plugged',
+    steps: [
+      { text: 'Plug the webcam straight into the Mac rather than through a hub or dock.', check: 'Does it show up now?' },
+      { text: 'Open Photo Booth, then choose the webcam from the Camera menu.', check: 'Do you see a picture?' },
+      { text: 'In System Settings, Privacy and Security, Camera, make sure the app you want is switched on.', check: 'Is it switched on?' },
+      { text: 'Restart the Mac with the webcam plugged in.', check: 'Does it work after the restart?' },
+    ],
+  },
+  {
+    id: 'app-frozen',
+    title: 'App frozen or not responding',
+    service: null,
+    category: 'software',
+    keywords: 'frozen freeze freezing responding hang hanging stuck spinning beach ball crash crashes crashing force quit app excel',
+    steps: [
+      { text: 'Press Option Command Escape, select the frozen app, and click Force Quit.', check: 'Did it close?' },
+      { text: 'Open the app again and check whether your work was recovered.', check: 'Is it working now?' },
+      { text: 'If it freezes again, open its Help menu and check for updates, which for Office apps opens Microsoft AutoUpdate.', check: 'Did it update?' },
+      { text: 'Restart the Mac to clear anything stuck in the background.', check: 'Does the app stay responsive now?' },
+    ],
+  },
+  {
+    id: 'fan-heat',
+    title: 'Laptop hot or fan running loud',
+    service: null,
+    category: 'hardware',
+    keywords: 'fan fans loud noise noisy hot heat heating overheating warm temperature',
+    steps: [
+      { text: 'Open Activity Monitor, sort by CPU, and quit any app you do not need that is using a lot.', check: 'Has the fan calmed down?' },
+      { text: 'Put the laptop on a hard flat surface so the air vents are not blocked.', check: 'Is it cooler now?' },
+      { text: 'Close browser tabs you are not using, especially ones playing video.', check: 'Is it quieter now?' },
+      { text: 'Restart the laptop to stop any stuck background process.', check: 'Is the fan normal after the restart?' },
+    ],
+  },
+  {
+    id: 'battery-drain',
+    title: 'Battery draining fast or not charging',
+    service: null,
+    category: 'hardware',
+    keywords: 'battery drain draining drains fast charge charging power percent dies dying',
+    steps: [
+      { text: 'Open System Settings, Battery, and check that Battery Health says Normal.', check: 'Does it say Normal?' },
+      { text: 'Open Activity Monitor, click the Energy tab, and quit apps with a high energy impact that you do not need.', check: 'Is the drain better now?' },
+      { text: 'If it is not charging, try another USB-C port and check that the cable and adapter are firmly connected.', check: 'Is it charging now?' },
+      { text: 'Click the battery icon in the menu bar, because Charging On Hold there means macOS is protecting a warm battery, which is normal.', check: 'Does it say Charging On Hold?' },
+    ],
+  },
+  {
+    id: 'licence-activation',
+    title: 'Microsoft 365 asks for a licence or activation',
+    service: null,
+    category: 'software',
+    keywords: 'licence license licensed unlicensed activate activation activating product office word powerpoint microsoft 365 subscription',
+    steps: [
+      { text: 'In Word, open the Word menu, choose Sign Out, then sign in again with your Nimbus email address.', check: 'Is the licence message gone?' },
+      { text: 'Quit all Office apps with Command Q and open Word again.', check: 'Is the message gone now?' },
+      { text: 'In Word, open Help, choose Check for Updates, and install any updates Microsoft AutoUpdate offers.', check: 'Did the updates install?' },
+      { text: 'If it still asks, I will raise a ticket for IT to check your Microsoft 365 licence.', check: 'Shall I raise that ticket?' },
+    ],
+  },
+  {
+    id: 'browser-cache',
+    title: 'Website not loading properly: clear the browser cache and cookies',
+    service: null,
+    category: 'software',
+    keywords: 'browser cache cookies clear website broken looks chrome safari edge blank',
+    steps: [
+      { text: 'Reload the page while holding Shift, or press Shift Command R in Chrome.', check: 'Does it look right now?' },
+      { text: 'Open the site in a private window with Shift Command N.', check: 'Does it work in the private window?' },
+      { text: 'In Chrome, open Settings, Privacy and security, Delete browsing data, and clear cookies and cached files for the last day.', check: 'Does the site work now?' },
+      { text: 'In Safari, open Settings, Privacy, Manage Website Data, and remove the data for that site.', check: 'Does the site load properly now?' },
+    ],
+  },
+  {
+    id: 'sharepoint-access',
+    title: "Can't open a SharePoint site or Teams files",
+    service: null,
+    category: 'software',
+    keywords: 'sharepoint site teams files document link denied permission open',
+    steps: [
+      { text: 'Open the link in your browser and check that you are signed in as priya dot sharma at nimbuslabs dot example, not a personal account.', check: 'Is it your Nimbus account?' },
+      { text: 'Open the link in a private window with Shift Command N and sign in again.', check: 'Does it open there?' },
+      { text: 'If it says you need access, click Request access on that page so the site owner gets your request.', check: 'Did you send the request?' },
+      { text: 'If nobody approves it, I will raise an access request naming the site and who owns it.', check: 'Shall I raise that request?' },
+    ],
+  },
+  {
+    id: 'onedrive-sync',
+    title: 'OneDrive files not syncing',
+    service: null,
+    category: 'software',
+    keywords: 'onedrive sync syncing files upload uploading cloud folder paused',
+    steps: [
+      { text: 'Click the OneDrive cloud in the menu bar and check that syncing is not paused.', check: 'Is it syncing now?' },
+      { text: 'In the OneDrive settings, check that you are signed in with your Nimbus account.', check: 'Are you signed in?' },
+      { text: 'Look for files with a red cross, which usually have a name that is too long or uses a character OneDrive does not allow.', check: 'Are there files with errors?' },
+      { text: 'Quit OneDrive from its menu bar icon and open it again from Applications.', check: 'Is it syncing now?' },
+    ],
+  },
+  {
+    id: 'access-request',
+    title: 'Request access to an app, shared drive or group',
+    service: null,
+    category: 'inquiry',
+    request: true,
+    keywords: 'access request permission grant join group distribution list shared drive folder jira github confluence account role',
+    steps: [
+      { text: 'Tell me exactly what you need access to, such as the app, drive or group name.', check: 'Do you have the exact name?' },
+      { text: 'Tell me who approves it, usually your manager or the owner of that system.', check: 'Do you know who approves it?' },
+      { text: 'I will raise an access request with the name, the access level you need and the business reason.', check: 'Shall I raise that request now?' },
+    ],
+  },
+  {
+    id: 'hardware-request',
+    title: 'Request new hardware or a replacement',
+    service: null,
+    category: 'hardware',
+    request: true,
+    keywords: 'new hardware request replacement replace accessory accessories charger headset adapter order',
+    steps: [
+      { text: 'Tell me what you need and why, for example a replacement charger or a second monitor.', check: 'Do you know exactly what you need?' },
+      { text: 'If something is broken, tell me whether it is physically damaged or just stopped working.', check: 'Is it physically damaged?' },
+      { text: 'I will raise a hardware request with the item, the reason and your desk location for delivery.', check: 'Shall I raise that request now?' },
+    ],
+  },
+  {
+    id: 'phishing',
+    title: 'Report a phishing or suspicious email',
+    service: null,
+    category: 'inquiry',
+    keywords: 'phishing phish suspicious scam spam fake email link clicked attachment report sender fraud',
+    steps: [
+      { text: 'Do not click any links or open any attachments in that email.', check: 'Have you clicked anything in it?' },
+      { text: 'In Outlook, select the email, then choose Report and Report phishing in the toolbar.', check: 'Is it reported?' },
+      { text: 'If you clicked a link or typed your password, I can reset your password right away after a code from your work email.', check: 'Did you enter your password anywhere?' },
+      { text: 'Delete the email afterwards, and warn colleagues who got it not to click it.', check: 'Is it deleted?' },
+    ],
+  },
+  {
+    id: 'suspicious-login',
+    title: 'Suspicious sign-in alert or hacked account',
+    service: null,
+    category: 'inquiry',
+    keywords: 'suspicious sign signin alert unusual unknown location country hacked compromised approve prompt push unexpected someone',
+    steps: [
+      { text: 'Do not approve any sign-in prompt on your phone that you did not start yourself.', check: 'Have you approved one you did not start?' },
+      { text: 'I can reset your password straight away after verifying you with a code from your work email.', check: 'Shall I send the code now?' },
+      { text: 'After the reset, sign in again on your laptop and phone with the new password.', check: 'Are you signed in again?' },
+      { text: 'Tell me roughly when the alert came and from where, so IT can check the sign-in logs.', check: 'Do you know when it came?' },
+    ],
+  },
+  {
+    id: 'slack-not-loading',
+    title: "Slack won't load or is stuck connecting",
+    service: 'slack',
+    category: 'software',
+    keywords: 'slack loading load connecting connect stuck messages channels workspace',
+    steps: [
+      { text: 'In Slack, open the Help menu, choose Troubleshooting, then Clear Cache and Restart.', check: 'Is Slack working now?' },
+      { text: 'Try Slack in your browser at app dot slack dot com.', check: 'Does it work in the browser?' },
+      { text: 'Quit Slack with Command Q and open it again.', check: 'Does it connect now?' },
+      { text: 'Open the Self Service app and install the latest Slack.', check: 'Is Slack working after the update?' },
+    ],
+  },
+];
+
+const norm = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+export const findArticle = (id: string) => ARTICLES.find((a) => a.id === norm(id));

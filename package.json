@@ -1,0 +1,44 @@
+{
+  "name": "ask-it",
+  "version": "0.1.0",
+  "description": "ASK IT: a voice IT helpdesk that resolves L1 issues by voice and raises ServiceNow tickets only when a fix fails, built on Agora Conversational AI with Murf Falcon TTS.",
+  "author": "",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify": "pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build"
+  },
+  "dependencies": {
+    "agora-agent-client-toolkit": "2.10.0",
+    "agora-agents": "^2.9.0",
+    "agora-rtc-react": "^2.5.1",
+    "agora-rtc-sdk-ng": "^4.24.3",
+    "agora-rtm": "^2.2.3",
+    "agora-token": "^2.0.5",
+    "lucide-react": "^0.454.0",
+    "next": "^16.2.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.6",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.2.2",
+    "postcss": "^8.5.1",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.58.1",
+    "vitest": "^3.2.7"
+  }
+}
