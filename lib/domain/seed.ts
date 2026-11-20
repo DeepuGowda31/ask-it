@@ -59,3 +59,8 @@ export function createSessionState(id: string, now: number, seed: SeedOptions = 
     counter: 100,
   };
 }
+
+// Sessions saved before the persona changed take the current employee; an up to date one comes back as it is.
+export function withCurrentEmployee(state: SessionState): SessionState {
+  return JSON.stringify(state.employee) === JSON.stringify(EMPLOYEE) ? state : { ...state, employee: structuredClone(EMPLOYEE) };
+}

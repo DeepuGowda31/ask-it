@@ -1,5 +1,5 @@
 import { randomInt } from 'node:crypto';
-import { createSessionState, type SeedOptions } from '@/lib/domain/seed';
+import { createSessionState, withCurrentEmployee, type SeedOptions } from '@/lib/domain/seed';
 import type { AssetVisit, SessionState } from '@/lib/domain/types';
 import type { VersionedStore } from './store';
 
@@ -36,7 +36,7 @@ export async function createSession(store: VersionedStore, now: number, seed?: S
 
 export async function loadSession(store: VersionedStore, code: string): Promise<{ state: SessionState; version: number } | null> {
   const hit = await store.get(key(code));
-  return hit ? { state: JSON.parse(hit.value) as SessionState, version: hit.version } : null;
+  return hit ? { state: withCurrentEmployee(JSON.parse(hit.value) as SessionState), version: hit.version } : null;
 }
 
 // Optimistic read-modify-write; `fn` must be pure (it may rerun), and returning the same state skips the write.

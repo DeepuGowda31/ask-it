@@ -102,8 +102,8 @@ function CheckIcon({ status }: { status: 'pending' | 'ok' | 'warn' | 'bad' | 'un
 const pretty = (code: string) => (/^\d{6}$/.test(code) ? `${code.slice(0, 3)} ${code.slice(3)}` : code);
 
 // The one thing that needs the employee now; hidden before the call when nothing does.
-export function RightNowCard({ view, now, inCall }: { view: SessionView; now: number; inCall: boolean }) {
-  const r = rightNow(view, now);
+export function RightNowCard({ view, now, inCall, since = null }: { view: SessionView; now: number; inCall: boolean; since?: number | null }) {
+  const r = rightNow(view, now, since);
   if (!r && !inCall) return null;
   return (
     <section className="wc-now wc-enter" data-kind={r?.kind ?? 'idle'} aria-label="Right now" aria-live="polite">

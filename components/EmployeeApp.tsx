@@ -120,7 +120,8 @@ export default function EmployeeApp({ setupWarning }: { setupWarning: string | n
   const { ringing, snooze } = useFollowUp(code, view?.followUp ?? null, (phase === 'idle' || phase === 'ended') && !!view && !view.call.active, now);
   const catalog = useMemo(() => (view ? ticketCatalog(view) : undefined), [view]);
   // The stage shows what needs the employee now, or the tickets they asked for on this call; otherwise the welcome.
-  const stageNow = Boolean(inCall && view && rightNow(view, now));
+  const callStart = view?.call.startedAt ?? null;
+  const stageNow = Boolean(inCall && view && rightNow(view, now, callStart));
   const askedList = inCall && view?.ticketList && view.call.startedAt && view.ticketList.at >= view.call.startedAt ? view.ticketList : null;
   const asset = view?.asset ?? null;
 
@@ -233,7 +234,7 @@ export default function EmployeeApp({ setupWarning }: { setupWarning: string | n
           </section>
           <div className="wc-stage">
             {sessionStatus === 'error' ? <p className="wc-notice wc-notice-warn" role="status">Connection lost. Showing the last known state while retrying…</p> : null}
-            {stageNow && view ? <RightNowCard view={view} now={now} inCall={false} /> : null}
+            {stageNow && view ? <RightNowCard view={view} now={now} inCall={false} since={callStart} /> : null}
             {askedList ? <AskedTickets list={askedList} /> : null}
             {inCall && view?.documents.length ? <DocumentList documents={view.documents} onOpen={showDoc} /> : null}
             {!stageNow && !askedList ? (

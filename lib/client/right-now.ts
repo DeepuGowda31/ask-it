@@ -26,14 +26,16 @@ function diagnosticsCard(d: NonNullable<SessionView['diagnostics']>): RightNow {
 }
 
 // The one thing the employee needs to act on: a waiting yes, then the email code, then a laptop check while it runs, then the latest check, lockdown or fix step.
-export function rightNow(view: SessionView, now: number): RightNow | null {
+// `since` is when this call started: a fix, lockdown or laptop check from an earlier call is not shown again.
+export function rightNow(view: SessionView, now: number, since: number | null = null): RightNow | null {
   const p = view.pending;
   if (p && p.expiresAt > now) return { kind: 'confirm', summary: p.summary, warnings: p.warnings, code: p.code, expiresAt: p.expiresAt };
   const v = view.verification;
   if (v.status === 'pending') return { kind: 'verify', email: view.account.email, attemptsLeft: v.attemptsLeft, simulatedCode: v.simulatedInbox?.code ?? null };
-  const fix = view.troubleshooting;
-  const l = view.lockdown;
-  const d = view.diagnostics;
+  const fresh = (at: number) => since === null || at >= since;
+  const fix = view.troubleshooting && fresh(view.troubleshooting.startedAt) ? view.troubleshooting : null;
+  const l = view.lockdown && fresh(view.lockdown.at) ? view.lockdown : null;
+  const d = view.diagnostics && fresh(view.diagnostics.requestedAt) ? view.diagnostics : null;
   if (d && (d.status === 'requested' || ((!fix || d.requestedAt >= fix.startedAt) && (!l || d.requestedAt >= l.at)))) return diagnosticsCard(d);
   if (l && (!fix || l.at >= fix.startedAt)) {
     return { kind: 'lockdown', incident: l.incident, failed: l.steps.filter((s) => s.status === 'failed').length, steps: l.steps.map((s) => ({ label: LOCKDOWN_LABEL[s.step], status: s.status })) };

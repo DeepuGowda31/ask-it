@@ -331,8 +331,8 @@ describe('greeting at call start', () => {
     const llm = bodies[0].properties.llm;
     expect(llm.greeting_message).toBe('Hi Deepak, ASK IT here.');
     expect(llm.system_messages[0].content).toMatch(/Deepak's open tickets\n.*\n- INC0011994, Figma licence request: in progress, low urgency\./);
-    expect(llm.system_messages[0].content).toMatch(/Call opener\n- If Deepak stays quiet after your greeting, you add: "What can I help you with today\?"/);
-    expect((await view(code)).call.opener).toBe('What can I help you with today?');
+    expect(llm.system_messages[0].content).toMatch(/Call opener\n- If Deepak stays quiet after your greeting, you add: "I'm here to help you sort out any IT issue\. What's going on\?\"/);
+    expect((await view(code)).call.opener).toBe("I'm here to help you sort out any IT issue. What's going on?");
   });
   it('gives a returned call no opener, since its greeting already asks', async () => {
     const bodies = mockAgora();

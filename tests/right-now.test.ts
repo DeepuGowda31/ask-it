@@ -44,6 +44,12 @@ describe('rightNow', () => {
     s = (await call(s, 'reportStep', { outcome: 'fixed', note: '' })).state;
     expect(rightNow(view(s), NOW)).toMatchObject({ kind: 'outcome', tone: 'ok', title: 'Fixed on the call' });
   });
+  it('leaves out a fix from an earlier call', async () => {
+    let s = (await call(freshState(), 'startTroubleshooting', { articleId: 'vpn', issue: '' })).state;
+    s = (await call(s, 'reportStep', { outcome: 'fixed', note: '' })).state;
+    expect(rightNow(view(s), NOW + 60 * MINUTE, NOW + 30 * MINUTE)).toBeNull();
+    expect(rightNow(view(s), NOW, NOW - MINUTE)).toMatchObject({ kind: 'outcome', title: 'Fixed on the call' });
+  });
 
   it('reports the ticket a failed fix became', async () => {
     let s = (await call(freshState(), 'startTroubleshooting', { articleId: 'vpn', issue: '' })).state;

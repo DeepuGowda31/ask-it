@@ -130,8 +130,8 @@ const listMyTickets = tool<{ mode: Mode; listed: Result<RemoteTicket[]> }>({
   name: 'listMyTickets',
   description: `${EMPLOYEE.firstName}'s IT tickets, refreshed from ServiceNow, filtered by status and time: "what's open" is status open, "show my resolved tickets" is status resolved, "anything closed this week" is status resolved and period this_week. The reply is a short summary; the tickets are in the result, never read them one by one. If ServiceNow is unreachable, returns the last known list and says it may be stale.`,
   params: {
-    status: { description: 'open, resolved (includes closed) or all; empty string means all', enum: ['open', 'resolved', 'all'], allowEmpty: true },
-    period: { description: 'Only when the employee names a time: today, yesterday, this_week, last_7_days or this_month, by when it was raised (open) or resolved. Empty string otherwise, as for "my tickets" or "tickets under my name"', enum: PERIODS, allowEmpty: true },
+    status: { description: 'all, open, or resolved (includes closed). all unless they ask for open or resolved ones', enum: ['all', 'open', 'resolved'], allowEmpty: true },
+    period: { description: 'any unless the employee names a time; then today, yesterday, this_week, last_7_days or this_month, by when it was raised (open) or resolved. "my tickets" or "tickets under my name" is any', enum: ['any', ...PERIODS], allowEmpty: true },
   },
   minutesSaved: 2,
   async effect({ deps }) {
@@ -139,7 +139,7 @@ const listMyTickets = tool<{ mode: Mode; listed: Result<RemoteTicket[]> }>({
   },
   run({ state, now, effect }, args) {
     const status = (args.status || 'all') as TicketStatus;
-    const period = (args.period || '') as Period | '';
+    const period = (args.period === 'any' ? '' : args.period || '') as Period | '';
     const listed = effect?.listed;
     if (effect && listed?.ok) mergeTickets(state, listed.value, effect.mode, now);
     const tickets = state.tickets.filter((t) => matches(t, status) && inPeriod(t, period, now));

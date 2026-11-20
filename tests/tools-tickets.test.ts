@@ -5,6 +5,7 @@ import { DAY, MINUTE } from '@/lib/domain/time';
 import { buildSessionView } from '@/lib/domain/view';
 import type { SessionState } from '@/lib/domain/types';
 import { NOW, call, codeOf, confirmed, freshState } from './helpers';
+import { toolsFor } from '@/lib/domain/tools';
 
 async function exhaustedVpn() {
   let out = await call(freshState(), 'startTroubleshooting', { articleId: 'vpn', issue: 'VPN drops every few minutes' });
@@ -137,6 +138,12 @@ describe('listMyTickets', () => {
     expect(out.result.data).toMatchObject({ stale: false, status: 'open', period: '', total: 1, tickets: [expect.objectContaining({ number: 'INC0010042', summary: 'Monitor flickers', state: 'In Progress', urgency: 2, source: 'live', syncFailed: false })] });
     expect(out.result.say).toMatch(/^You have one open ticket, .*in progress\. Want the details\?$/);
     expect(out.result.next).toMatch(/do not read them aloud/);
+  });
+  it('puts "all" and "any" first, so a model guessing the first option never narrows the list', async () => {
+    const spec = toolsFor('employee').find((t) => t.name === 'listMyTickets')!;
+    expect(spec.params.status.enum?.[0]).toBe('all');
+    expect(spec.params.period.enum?.[0]).toBe('any');
+    expect(numbers(await list(freshState(), '', 'any'))).toEqual(numbers(await list(freshState(), '', '')));
   });
   it('lists everything when the status is empty or "all"', async () => {
     const all = await list(freshState(), '');

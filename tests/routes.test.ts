@@ -310,7 +310,7 @@ describe('/api/invite-agent', () => {
     expect(p.llm.tools).toHaveLength(toolsFor('employee').length);
     expect(p.llm.tools[0].server.url).toMatch(/^https:\/\/askit\.example\.com\/api\/tools\//);
     expect(p.llm.greeting_message).toBe('Hi Deepak, ASK IT here.');
-    expect(p.llm.system_messages[0].content).toMatch(/Call opener\n- If Deepak stays quiet after your greeting, you add: "What can I help you with today\?"/);
+    expect(p.llm.system_messages[0].content).toMatch(/Call opener\n- If Deepak stays quiet after your greeting, you add: "I'm here to help you sort out any IT issue\. What's going on\?\"/);
     expect(p.llm.system_messages[0].content).toMatch(/^You are ASK IT/);
     expect(p.llm.failure_message).toBeTruthy();
     expect(p.advanced_features).toMatchObject({ enable_rtm: true, enable_tools: true });
@@ -323,7 +323,7 @@ describe('/api/invite-agent', () => {
     expect(p.filler_words).toBeUndefined();
 
     const state = await (await stateRoute(new NextRequest(`http://localhost/api/state?session=${code}`))).json();
-    expect(state.call).toMatchObject({ active: true, agentId: 'agent-abc', opener: 'What can I help you with today?' });
+    expect(state.call).toMatchObject({ active: true, agentId: 'agent-abc', opener: "I'm here to help you sort out any IT issue. What's going on?" });
   });
   it('starts the IT desk persona with its own prompt, tools and template variable', async () => {
     const { bodies } = mockAgora();
@@ -436,7 +436,7 @@ describe('/api/intro', () => {
     expect(res.status).toBe(200);
     const speak = calls.filter((c) => c.url.includes('/agents/agent-it/speak'));
     expect(speak).toHaveLength(1);
-    expect(speak[0].body).toMatchObject({ text: 'What can I help you with today?', priority: 'IGNORE', interruptable: true });
+    expect(speak[0].body).toMatchObject({ text: "I'm here to help you sort out any IT issue. What's going on?", priority: 'IGNORE', interruptable: true });
     expect(await (await intro(code)).json()).toMatchObject({ state: 'already' });
     expect(calls.filter((c) => c.url.includes('/speak'))).toHaveLength(1);
   });
