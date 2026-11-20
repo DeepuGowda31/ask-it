@@ -83,3 +83,12 @@ export function alertProblem(alerts: { status: 'queued' | 'sent' | 'failed'; err
 export function introDue<T extends { role: 'agent' | 'user'; streaming: boolean }>(transcript: T[], signal: string): boolean {
   return transcript.length === 1 && transcript[0].role === 'agent' && !transcript[0].streaming && signal === 'listening';
 }
+
+// A call step that never answers fails with its own message instead of leaving the call on "Connecting".
+export function withTimeout<T>(step: Promise<T>, ms: number, onTimeout: () => Error): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(onTimeout()), ms);
+  });
+  return Promise.race([step, late]).finally(() => clearTimeout(timer));
+}

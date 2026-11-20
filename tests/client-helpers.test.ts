@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { cleanSpokenText, describeMicError, capTranscript, formatCountdown, formatHours, formatRate, ticketQueue, ageLabel, holdLabel, priorityTone, alertProblem, introDue } from '@/lib/client/helpers';
+import { describe, expect, it, vi } from 'vitest';
+import { cleanSpokenText, describeMicError, capTranscript, formatCountdown, formatHours, formatRate, ticketQueue, ageLabel, holdLabel, priorityTone, alertProblem, introDue, withTimeout } from '@/lib/client/helpers';
 import { MINUTE } from '@/lib/domain/time';
 import { NOW } from './helpers';
 
@@ -162,5 +162,22 @@ describe('introDue', () => {
     expect(introDue([greeting, { ...greeting, id: 'u1', role: 'user' as const }], 'listening')).toBe(false);
     expect(introDue([], 'listening')).toBe(false);
     expect(introDue([{ ...greeting, role: 'user' as const }], 'listening')).toBe(false);
+  });
+});
+
+describe('withTimeout', () => {
+  it('passes the result through when it arrives in time', async () => {
+    await expect(withTimeout(Promise.resolve(7), 50, () => new Error('slow'))).resolves.toBe(7);
+  });
+  it('passes the original error through', async () => {
+    await expect(withTimeout(Promise.reject(new Error('denied')), 50, () => new Error('slow'))).rejects.toThrow('denied');
+  });
+  it('fails with the given error when the step never finishes', async () => {
+    vi.useFakeTimers();
+    const pending = withTimeout(new Promise(() => {}), 1000, () => new Error('The microphone permission did not come through.'));
+    const check = expect(pending).rejects.toThrow('The microphone permission did not come through.');
+    await vi.advanceTimersByTimeAsync(1000);
+    await check;
+    vi.useRealTimers();
   });
 });

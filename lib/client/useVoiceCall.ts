@@ -4,13 +4,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RTMClient } from 'agora-rtm';
 import type { AgentEvent, CallCallbacks } from '@/components/CallSession';
 import type { TranscriptMessage } from '@/lib/conversation';
-import { describeMicError } from './helpers';
+import { describeMicError, withTimeout } from './helpers';
 import { agentErrorBanner, noSoundSuspected } from './audio';
 import { SIGNAL_CAPTION, mapSignalState, type AudioLevelSource, type SignalState } from './signal';
 import type { CallProbe } from './diagnostics';
 import type { AgentResponse, AgoraRenewalTokens, AgoraTokenData, ClientStartRequest } from '@/types/conversation';
 
 type Phase = 'idle' | 'connecting' | 'live' | 'ended';
+// How long each call step may take before the call stops with a message instead of staying on "Connecting".
+const MIC_WAIT_MS = 20_000;
+const STEP_WAIT_MS = 15_000;
+const AGENT_WAIT_MS = 20_000;
+const MIC_LATE = 'The microphone permission did not come through. Allow the microphone for this site (lock icon in the address bar), then try again.';
+const RTM_LATE = "Could not reach the live voice service. This network may be blocking it: try Wi-Fi or another network, then try again.";
 type Persona = NonNullable<ClientStartRequest['persona']>;
 
 class UserFacingError extends Error {}
@@ -88,13 +94,13 @@ export function useVoiceCall({ code, persona, now, recentAction, thinkingHint }:
           throw new UserFacingError('This browser cannot make voice calls. Use a recent Chrome, Edge, Safari or Firefox over HTTPS.');
         }
         try {
-          const probe = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const probe = await withTimeout(navigator.mediaDevices.getUserMedia({ audio: true }), MIC_WAIT_MS, () => new UserFacingError(MIC_LATE));
           probe.getTracks().forEach((t) => t.stop());
         } catch (e) {
-          throw new UserFacingError(describeMicError(e));
+          throw e instanceof UserFacingError ? e : new UserFacingError(describeMicError(e));
         }
 
-        const tokenRes = await fetch('/api/generate-agora-token').catch(() => null);
+        const tokenRes = await withTimeout(fetch('/api/generate-agora-token'), STEP_WAIT_MS, () => new UserFacingError('Getting a call token took too long. Check your connection and try again.')).catch(() => null);
         const token = tokenRes ? await tokenRes.json().catch(() => ({})) : {};
         if (!tokenRes?.ok) throw new UserFacingError(`Could not get a call token${token.error ? `: ${token.error}` : '. Check your connection.'}`);
 
@@ -102,17 +108,27 @@ export function useVoiceCall({ code, persona, now, recentAction, thinkingHint }:
         rtm = new AgoraRTM.RTM(process.env.NEXT_PUBLIC_AGORA_APP_ID!, token.uid);
         const start: ClientStartRequest = { requester_id: token.uid, channel_name: token.channel, session: code, takeover, persona, ...(followUp ? { followUp } : {}) };
         const [invite, rtmReady] = await Promise.allSettled([
-          fetch('/api/invite-agent', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(start),
-          }).then(async (res) => ({ res, body: await res.json().catch(() => ({})) })),
-          (async () => {
-            await rtm!.login({ token: token.token });
-            await rtm!.subscribe(token.channel);
-          })(),
+          withTimeout(
+            fetch('/api/invite-agent', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(start),
+            }).then(async (res) => ({ res, body: await res.json().catch(() => ({})) })),
+            AGENT_WAIT_MS,
+            () => new UserFacingError('ASK IT took too long to start. Please try again.'),
+          ),
+          withTimeout(
+            (async () => {
+              await rtm!.login({ token: token.token });
+              await rtm!.subscribe(token.channel);
+            })(),
+            STEP_WAIT_MS,
+            () => new UserFacingError(RTM_LATE),
+          ),
         ]);
-        if (invite.status === 'rejected') throw new UserFacingError('Could not reach the server to start ASK IT. Check your connection.');
+        if (invite.status === 'rejected') {
+          throw invite.reason instanceof UserFacingError ? invite.reason : new UserFacingError('Could not reach the server to start ASK IT. Check your connection.');
+        }
         const { res, body } = invite.value;
         if (!res.ok) {
           if (res.status === 409) setCanTakeOver(true);
@@ -121,7 +137,7 @@ export function useVoiceCall({ code, persona, now, recentAction, thinkingHint }:
         const agent = body as AgentResponse;
         if (rtmReady.status === 'rejected') {
           fetch('/api/stop-conversation', { method: 'POST', body: JSON.stringify({ agent_id: agent.agent_id, session: code, reason: 'messaging failed' }) }).catch(() => {});
-          throw new UserFacingError('Could not connect the live transcript channel. Please try again.');
+          throw rtmReady.reason instanceof UserFacingError ? rtmReady.reason : new UserFacingError('Could not connect the live transcript channel. Please try again.');
         }
         agentIdRef.current = agent.agent_id;
         setRtmClient(rtm);
