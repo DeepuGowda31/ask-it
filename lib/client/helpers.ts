@@ -100,3 +100,22 @@ export function withTimeout<T>(step: Promise<T>, ms: number, onTimeout: () => Er
   });
   return Promise.race([step, late]).finally(() => clearTimeout(timer));
 }
+
+type FallbackOptions = { directMs: number; proxyMs: number; proxyFirst: boolean; onLate: () => Error; onAbandon?: (proxy: boolean) => void };
+
+// Direct first, then once through the cloud proxy (TLS 443) for networks that block the direct route.
+export async function connectWithFallback<T>(attempt: (proxy: boolean) => Promise<T>, o: FallbackOptions): Promise<{ value: T; proxy: boolean }> {
+  if (!o.proxyFirst) {
+    try {
+      return { value: await withTimeout(attempt(false), o.directMs, o.onLate), proxy: false };
+    } catch {
+      o.onAbandon?.(false);
+    }
+  }
+  try {
+    return { value: await withTimeout(attempt(true), o.proxyMs, o.onLate), proxy: true };
+  } catch (e) {
+    o.onAbandon?.(true);
+    throw e;
+  }
+}

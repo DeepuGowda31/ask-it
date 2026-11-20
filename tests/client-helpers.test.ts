@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { cleanSpokenText, describeMicError, capTranscript, formatCountdown, formatHours, formatRate, ticketQueue, ageLabel, durationLabel, holdLabel, priorityTone, alertProblem, introDue, withTimeout } from '@/lib/client/helpers';
+import { cleanSpokenText, describeMicError, capTranscript, formatCountdown, formatHours, formatRate, ticketQueue, ageLabel, durationLabel, holdLabel, priorityTone, alertProblem, introDue, withTimeout, connectWithFallback } from '@/lib/client/helpers';
 import { MINUTE } from '@/lib/domain/time';
 import { NOW } from './helpers';
 
@@ -184,6 +184,46 @@ describe('withTimeout', () => {
     const check = expect(pending).rejects.toThrow('The microphone permission did not come through.');
     await vi.advanceTimersByTimeAsync(1000);
     await check;
+    vi.useRealTimers();
+  });
+});
+
+describe('connectWithFallback', () => {
+  const never = () => new Promise<string>(() => {});
+  const late = () => new Error('blocked');
+  const timing = { directMs: 100, proxyMs: 200 };
+
+  it('stays direct when the direct attempt connects', async () => {
+    const attempt = vi.fn(async (proxy: boolean) => (proxy ? 'proxied' : 'direct'));
+    await expect(connectWithFallback(attempt, { ...timing, proxyFirst: false, onLate: late })).resolves.toEqual({ value: 'direct', proxy: false });
+    expect(attempt.mock.calls).toEqual([[false]]);
+  });
+  it('retries through the cloud proxy when the direct attempt is too slow', async () => {
+    vi.useFakeTimers();
+    const attempt = vi.fn((proxy: boolean) => (proxy ? Promise.resolve('proxied') : never()));
+    const out = connectWithFallback(attempt, { ...timing, proxyFirst: false, onLate: late });
+    await vi.advanceTimersByTimeAsync(100);
+    await expect(out).resolves.toEqual({ value: 'proxied', proxy: true });
+    expect(attempt.mock.calls).toEqual([[false], [true]]);
+    vi.useRealTimers();
+  });
+  it('retries through the proxy when the direct attempt fails outright', async () => {
+    const attempt = vi.fn((proxy: boolean) => (proxy ? Promise.resolve('proxied') : Promise.reject(new Error('socket closed'))));
+    await expect(connectWithFallback(attempt, { ...timing, proxyFirst: false, onLate: late })).resolves.toEqual({ value: 'proxied', proxy: true });
+  });
+  it('goes straight to the proxy once this browser needed it', async () => {
+    const attempt = vi.fn(async () => 'proxied');
+    await expect(connectWithFallback(attempt, { ...timing, proxyFirst: true, onLate: late })).resolves.toEqual({ value: 'proxied', proxy: true });
+    expect(attempt.mock.calls).toEqual([[true]]);
+  });
+  it('gives the late error when the proxy is too slow as well, and cleans up each failed attempt', async () => {
+    vi.useFakeTimers();
+    const cleanup = vi.fn();
+    const out = connectWithFallback(() => never(), { ...timing, proxyFirst: false, onLate: late, onAbandon: cleanup });
+    const check = expect(out).rejects.toThrow('blocked');
+    await vi.advanceTimersByTimeAsync(300);
+    await check;
+    expect(cleanup.mock.calls).toEqual([[false], [true]]);
     vi.useRealTimers();
   });
 });

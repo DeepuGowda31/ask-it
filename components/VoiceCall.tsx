@@ -14,9 +14,13 @@ const AgoraProvider = dynamic(
   async () => {
     const { AgoraRTCProvider, default: AgoraRTC } = await import('agora-rtc-react');
     return {
-      default: function Provider({ children }: { children: ReactNode }) {
+      default: function Provider({ proxy, children }: { proxy: boolean; children: ReactNode }) {
         const ref = useRef<ReturnType<typeof AgoraRTC.createClient> | null>(null);
-        if (!ref.current) ref.current = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+        if (!ref.current) {
+          ref.current = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+          // Force TCP cloud proxy over TLS 443, set before joining.
+          if (proxy) ref.current.startProxyServer(5);
+        }
         return <AgoraRTCProvider client={ref.current}>{children}</AgoraRTCProvider>;
       },
     };
@@ -30,7 +34,7 @@ export function CallMount({ call }: { call: VoiceCall }) {
   return (
     <Suspense fallback={null}>
       <ErrorBoundary onError={() => call.endCall('client error', 'The call view crashed. Please start a new call.')}>
-        <AgoraProvider>
+        <AgoraProvider proxy={call.agoraData.proxy === true}>
           <CallSession agoraData={call.agoraData} rtmClient={call.rtmClient} micEnabled={call.micEnabled} onTokenWillExpire={call.handleTokenWillExpire} callbacks={call.callbacks} />
         </AgoraProvider>
       </ErrorBoundary>

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RTMClient } from 'agora-rtm';
 import type { AgentEvent, CallCallbacks } from '@/components/CallSession';
 import type { TranscriptMessage } from '@/lib/conversation';
-import { describeMicError, withTimeout } from './helpers';
+import { connectWithFallback, describeMicError, withTimeout } from './helpers';
 import { agentErrorBanner, noSoundSuspected } from './audio';
 import { SIGNAL_CAPTION, mapSignalState, type AudioLevelSource, type SignalState } from './signal';
 import type { CallProbe } from './diagnostics';
@@ -16,7 +16,25 @@ const MIC_WAIT_MS = 20_000;
 const STEP_WAIT_MS = 15_000;
 const AGENT_WAIT_MS = 20_000;
 const MIC_LATE = 'The microphone permission did not come through. Allow the microphone for this site (lock icon in the address bar), then try again.';
-const RTM_LATE = "Could not reach the live voice service. This network may be blocking it: try Wi-Fi or another network, then try again.";
+const RTM_LATE = 'Could not reach the live voice service. This network may be blocking it. Try Wi-Fi or another network, then try again.';
+// The direct route gets a short wait; the cloud proxy (TLS 443) the rest. A tab that needed the proxy starts with it.
+const DIRECT_WAIT_MS = 7_000;
+const PROXY_KEY = 'askit.proxy';
+const proxyRemembered = () => {
+  try {
+    return sessionStorage.getItem(PROXY_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+const rememberProxy = (on: boolean) => {
+  try {
+    if (on) sessionStorage.setItem(PROXY_KEY, '1');
+    else sessionStorage.removeItem(PROXY_KEY);
+  } catch {
+    /* private mode */
+  }
+};
 type Persona = NonNullable<ClientStartRequest['persona']>;
 
 class UserFacingError extends Error {}
@@ -105,7 +123,7 @@ export function useVoiceCall({ code, persona, now, recentAction, thinkingHint }:
         if (!tokenRes?.ok) throw new UserFacingError(`Could not get a call token${token.error ? `: ${token.error}` : '. Check your connection.'}`);
 
         const { default: AgoraRTM } = await import('agora-rtm');
-        rtm = new AgoraRTM.RTM(process.env.NEXT_PUBLIC_AGORA_APP_ID!, token.uid);
+        const clients: Partial<Record<'direct' | 'proxy', RTMClient>> = {};
         const start: ClientStartRequest = { requester_id: token.uid, channel_name: token.channel, session: code, takeover, persona, ...(followUp ? { followUp } : {}) };
         const [invite, rtmReady] = await Promise.allSettled([
           withTimeout(
@@ -117,15 +135,24 @@ export function useVoiceCall({ code, persona, now, recentAction, thinkingHint }:
             AGENT_WAIT_MS,
             () => new UserFacingError('ASK IT took too long to start. Please try again.'),
           ),
-          withTimeout(
-            (async () => {
-              await rtm!.login({ token: token.token });
-              await rtm!.subscribe(token.channel);
-            })(),
-            STEP_WAIT_MS,
-            () => new UserFacingError(RTM_LATE),
+          connectWithFallback(
+            async (proxy) => {
+              const client = new AgoraRTM.RTM(process.env.NEXT_PUBLIC_AGORA_APP_ID!, token.uid, { cloudProxy: proxy });
+              clients[proxy ? 'proxy' : 'direct'] = client;
+              await client.login({ token: token.token });
+              await client.subscribe(token.channel);
+              return client;
+            },
+            {
+              directMs: DIRECT_WAIT_MS,
+              proxyMs: STEP_WAIT_MS,
+              proxyFirst: proxyRemembered(),
+              onLate: () => new UserFacingError(RTM_LATE),
+              onAbandon: (proxy) => clients[proxy ? 'proxy' : 'direct']?.logout().catch(() => {}),
+            },
           ),
         ]);
+        if (rtmReady.status === 'fulfilled') rtm = rtmReady.value.value;
         if (invite.status === 'rejected') {
           throw invite.reason instanceof UserFacingError ? invite.reason : new UserFacingError('Could not reach the server to start ASK IT. Check your connection.');
         }
@@ -139,9 +166,10 @@ export function useVoiceCall({ code, persona, now, recentAction, thinkingHint }:
           fetch('/api/stop-conversation', { method: 'POST', body: JSON.stringify({ agent_id: agent.agent_id, session: code, reason: 'messaging failed' }) }).catch(() => {});
           throw rtmReady.reason instanceof UserFacingError ? rtmReady.reason : new UserFacingError('Could not connect the live transcript channel. Please try again.');
         }
+        rememberProxy(rtmReady.value.proxy);
         agentIdRef.current = agent.agent_id;
         setRtmClient(rtm);
-        setAgoraData({ ...token, agentId: agent.agent_id });
+        setAgoraData({ ...token, agentId: agent.agent_id, proxy: rtmReady.value.proxy });
         setDeadline(Date.now() + (agent.max_seconds ?? 600) * 1000);
         phaseRef.current = 'live';
         setPhase('live');

@@ -3,6 +3,8 @@ export interface AgoraTokenData {
   uid: string;
   channel: string;
   agentId?: string;
+  // The call reached Agora through the cloud proxy, so the voice channel uses it too.
+  proxy?: boolean;
 }
 
 export interface ClientStartRequest {
