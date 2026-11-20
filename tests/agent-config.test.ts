@@ -114,6 +114,11 @@ describe('prompt and greeting', () => {
     expect(p).toMatch(/Their tickets\n- They are not in this prompt\. Whenever Deepak asks to see, list or check their tickets, call listMyTickets/);
     expect(p).toMatch(/only after it returns say they're on the screen/);
   });
+  it('switches guides when one does not fit, and gives Windows steps on Windows', () => {
+    const p = buildSystemPrompt(NOW);
+    expect(p).toMatch(/If a step does not fit what Deepak told you, such as being at home and not in the office, stop that guide: call searchKnowledge again with that detail and start the better guide/);
+    expect(p).toMatch(/On Windows, say the Windows way of a Mac step/);
+  });
   it('never turns away a device other than the laptop on file', () => {
     expect(buildSystemPrompt(NOW)).toMatch(/Help with any device Deepak names, Windows, Mac, phone or printer; never send them elsewhere/);
   });

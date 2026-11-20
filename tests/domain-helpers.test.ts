@@ -211,3 +211,18 @@ describe('seed in live ticket mode', () => {
     expect(s.outages).toEqual([]);
   });
 });
+
+describe('home and office internet guides', () => {
+  const top = (q: string) => rankKnowledge(q)[0]?.article.id;
+  it.each([
+    'internet not working at home',
+    'not able to connect to the internet, working from home on my hotspot',
+    'home wifi has no internet',
+    'phone hotspot connected but no internet',
+  ])('finds the home guide for %j', (q) => {
+    expect(top(q)).toBe('home-internet');
+  });
+  it.each(['office wifi not connecting', 'cannot join Nimbus-Corp wifi in the office'])('keeps the office guide for %j', (q) => {
+    expect(top(q)).toBe('wifi');
+  });
+});

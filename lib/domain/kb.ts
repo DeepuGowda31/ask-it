@@ -43,12 +43,26 @@ export const ARTICLES: Article[] = [
     title: 'Office Wi-Fi not connecting',
     service: 'wifi',
     category: 'network',
-    keywords: 'wifi wireless internet network office corp connect signal',
+    keywords: 'wifi wireless network office corp nimbus-corp guest floor meeting room connect signal',
     steps: [
       { text: 'Click the Wi-Fi icon in the menu bar and check that you are on Nimbus-Corp, not Nimbus-Guest.', check: 'Are you on Nimbus-Corp?' },
       { text: 'Turn Wi-Fi off, wait five seconds, and turn it back on.', check: 'Does a web page load now?' },
       { text: 'In System Settings, Wi-Fi, open the details for Nimbus-Corp, choose Forget This Network, then join it again with your Nimbus login.', check: 'Are you connected now?' },
       { text: 'Move closer to a meeting room or another floor to rule out a weak signal.', check: 'Does it work there?' },
+    ],
+  },
+  {
+    id: 'home-internet',
+    title: 'Home Wi-Fi or hotspot has no internet',
+    service: null,
+    category: 'network',
+    keywords: 'home internet wifi hotspot router broadband isp tethering mobile data working from home wfh remote no internet connection',
+    steps: [
+      { text: 'Check whether your phone or another device can open a web page on the same Wi-Fi.', check: 'Does another device have internet?' },
+      { text: 'Restart your router or hotspot by unplugging the router for thirty seconds or turning the hotspot off and on, then wait two minutes.', check: 'Does a web page load on the laptop now?' },
+      { text: 'On the laptop, turn Wi-Fi off and on, then forget your home network and join it again with its password.', check: 'Are you connected now?' },
+      { text: 'If you are on a phone hotspot, make sure mobile data is on and you have data left, and keep the phone close to the laptop.', check: 'Does it work now?' },
+      { text: 'Once pages load, connect GlobalProtect again so work sites open.', check: 'Do work sites open now?' },
     ],
   },
   {
