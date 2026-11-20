@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { displayTicketNumbers, statusTone, ticketList } from '@/lib/client/ticket-lines';
+import { displayTicketNumbers, listTurnId, statusTone, ticketList } from '@/lib/client/ticket-lines';
 import { spokenTicket } from '@/lib/domain/tickets';
 
 const CATALOG = new Map([
@@ -99,5 +99,25 @@ describe('statusTone', () => {
     [null, undefined],
   ] as const)('%s', (status, tone) => {
     expect(statusTone(status)).toBe(tone);
+  });
+});
+
+describe('listTurnId', () => {
+  const T = 1_795_000_000_000;
+  const msg = (id: string, role: 'agent' | 'user', createdAt?: number) => ({ id, role, text: '', createdAt, streaming: false, interrupted: false });
+  const turns = [msg('a1', 'agent', T), msg('u1', 'user', T + 5_000), msg('a2', 'agent', T + 9_000), msg('u2', 'user', T + 20_000), msg('a3', 'agent', T + 24_000)];
+  it('puts the list under the first ASK IT turn after it was made, allowing a little clock drift', () => {
+    expect(listTurnId(turns, T + 8_000, T)).toBe('a2');
+    expect(listTurnId(turns, T + 10_000, T)).toBe('a2');
+    expect(listTurnId(turns, T + 20_500, T)).toBe('a3');
+  });
+  it('waits for the answer when no ASK IT turn came after the list yet', () => {
+    expect(listTurnId(turns, T + 30_000, T)).toBeNull();
+  });
+  it('ignores a list from before this call', () => {
+    expect(listTurnId(turns, T - 60_000, T)).toBeNull();
+  });
+  it('uses the newest ASK IT turn when turns carry no times', () => {
+    expect(listTurnId([msg('a1', 'agent'), msg('u1', 'user'), msg('a2', 'agent')], T, T)).toBe('a2');
   });
 });

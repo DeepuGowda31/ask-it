@@ -86,6 +86,7 @@ describe('ServiceNow tickets', () => {
                 state: { display_value: 'In Progress', value: '2' },
                 urgency: { display_value: '1 - High', value: '1' },
                 sys_created_on: { display_value: '2026-11-17 22:00:00', value: '2026-11-18 09:00:00' },
+                opened_at: { display_value: '2026-11-15 09:30:00', value: '2026-11-15 04:00:00' },
                 sys_updated_on: { display_value: '2026-11-17 23:00:00', value: '2026-11-18 10:00:00' },
                 resolved_at: { display_value: '', value: '' },
               },
@@ -107,7 +108,7 @@ describe('ServiceNow tickets', () => {
     expect(out).toEqual({
       ok: true,
       value: [
-        { number: 'INC0010042', sysId: 'abc', summary: 'VPN', state: 'In Progress', urgency: 1, createdAt: Date.UTC(2026, 10, 18, 9), updatedAt: Date.UTC(2026, 10, 18, 10) },
+        { number: 'INC0010042', sysId: 'abc', summary: 'VPN', state: 'In Progress', urgency: 1, createdAt: Date.UTC(2026, 10, 15, 4), updatedAt: Date.UTC(2026, 10, 18, 10) },
         { number: 'INC0010035', sysId: 'def', summary: 'Wi-Fi', state: 'Resolved', urgency: 3, createdAt: Date.UTC(2026, 10, 16, 9), updatedAt: Date.UTC(2026, 10, 18, 10), resolvedAt: Date.UTC(2026, 10, 16, 12, 30), correlationId: 'askit:NMB-7K2:fix4217' },
       ],
     });
@@ -115,9 +116,9 @@ describe('ServiceNow tickets', () => {
     expect(list.init.method).toBe('GET');
     expect(list.url.startsWith('https://nimbus.service-now.example/api/now/table/incident?')).toBe(true);
     expect(query(list.url)).toEqual({
-      sysparm_query: 'caller_id=usr-1^ORDERBYDESCsys_created_on',
-      sysparm_limit: '10',
-      sysparm_fields: 'number,short_description,state,urgency,sys_created_on,sys_updated_on,sys_id,resolved_at,correlation_id',
+      sysparm_query: 'caller_id=usr-1^ORDERBYDESCopened_at',
+      sysparm_limit: '25',
+      sysparm_fields: 'number,short_description,state,urgency,sys_created_on,opened_at,sys_updated_on,sys_id,resolved_at,correlation_id',
       sysparm_display_value: 'all',
     });
   });

@@ -1,13 +1,12 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Activity, BellRing, CircleAlert, CircleCheck, CircleMinus, CircleX, Clock3, FileText, Mail, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Activity, CircleAlert, CircleCheck, CircleMinus, CircleX, Clock3, FileText, Mail, ShieldAlert, ShieldCheck } from 'lucide-react';
 import type { SessionView } from '@/lib/domain/view';
 import { formatCountdown, ticketQueue } from '@/lib/client/helpers';
 import { rightNow } from '@/lib/client/right-now';
 import { statusTone } from '@/lib/client/ticket-lines';
 import { dateLabel } from '@/lib/client/format';
-import { reminderLabel } from '@/lib/domain/reminders';
 
 type Mode = 'live' | 'simulated';
 
@@ -178,10 +177,9 @@ export function RightNowCard({ view, now, inCall }: { view: SessionView; now: nu
   );
 }
 
-const MAX_TICKETS = 5;
 
-// Open tickets first, then outages the employee follows, then closed ones; one line each. Waiting reminders follow.
-export function MyTickets({ view, now }: { view: SessionView; now: number }) {
+// Their ServiceNow tickets, open first, then outages they follow, then closed ones; one line each, the list scrolls.
+export function MyTickets({ view }: { view: SessionView }) {
   const rows = [
     ...view.outages.filter((o) => o.followed).map((o) => ({ number: o.incident, summary: o.title, status: 'Outage' })),
     ...ticketQueue(view.tickets).map((t) => ({ number: t.number, summary: t.summary.replace(/^Resolved by ASK IT: /, ''), status: t.state })),
@@ -191,8 +189,8 @@ export function MyTickets({ view, now }: { view: SessionView; now: number }) {
       {rows.length === 0 ? (
         <p className="wc-note">No tickets. ASK IT only raises one when a fix does not work.</p>
       ) : (
-        <ul className="wc-ticket-lines">
-          {rows.slice(0, MAX_TICKETS).map((t) => (
+        <ul className="wc-ticket-lines wc-ticket-scroll">
+          {rows.map((t) => (
             <li key={t.number} title={t.summary}>
               <span className="wc-mono">{t.number}</span>
               <span className="min-w-0 truncate">{t.summary}</span>
@@ -201,17 +199,6 @@ export function MyTickets({ view, now }: { view: SessionView; now: number }) {
           ))}
         </ul>
       )}
-      {rows.length > MAX_TICKETS ? <p className="wc-faint mt-2 text-[12px]">+{rows.length - MAX_TICKETS} more in the Inspector</p> : null}
-      {view.reminders.length ? (
-        <ul className="mt-2 grid gap-1" aria-label="Reminders">
-          {view.reminders.map((r) => (
-            <li key={r.id} className="flex items-center gap-2 text-[12px]">
-              <BellRing size={14} className="wc-tone-accent shrink-0" aria-hidden="true" />
-              <span className="min-w-0 truncate" title={r.about}>Reminder · {reminderLabel(r.at, now)} · about {r.about}</span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
     </Card>
   );
 }

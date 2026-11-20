@@ -75,3 +75,14 @@ export function statusTone(status: string | null): 'info' | 'warn' | 'bad' | und
   if (s.includes('hold')) return 'warn';
   return s === 'new' || s.includes('progress') ? 'info' : undefined;
 }
+
+// Server and voice clocks differ a little, so a turn just before the list still counts as its answer.
+const LIST_DRIFT_MS = 3000;
+
+// The ASK IT turn that answers a ticket list asked for in this call: the first one after it; without turn times, the newest.
+export function listTurnId(messages: { id: string; role: 'agent' | 'user'; createdAt?: number }[], listAt: number, callStart: number | null): string | null {
+  if (callStart !== null && listAt < callStart) return null;
+  const agent = messages.filter((m) => m.role === 'agent');
+  if (agent.some((m) => m.createdAt === undefined)) return agent.at(-1)?.id ?? null;
+  return agent.find((m) => m.createdAt! >= listAt - LIST_DRIFT_MS)?.id ?? null;
+}

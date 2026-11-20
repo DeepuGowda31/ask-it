@@ -20,7 +20,7 @@ interface Timeouts {
 const TIMEOUTS: Timeouts = { call: 4000, create: 5500 };
 // Valid resolution code on current releases (note the en dash); override with SERVICENOW_CLOSE_CODE.
 const CLOSE_CODE = 'Resolved – Permanent Fix Applied';
-const LIST_FIELDS = 'number,short_description,state,urgency,sys_created_on,sys_updated_on,sys_id,resolved_at,correlation_id';
+const LIST_FIELDS = 'number,short_description,state,urgency,sys_created_on,opened_at,sys_updated_on,sys_id,resolved_at,correlation_id';
 const TICKET_NUMBER = /^INC\d{7}$/;
 const CORRELATION_ID = /^askit:[A-Za-z0-9-]+:[A-Za-z0-9]+$/;
 
@@ -90,7 +90,8 @@ function toRemote(row: unknown): RemoteTicket | null {
     summary: String(field(row, 'short_description', 'display_value') ?? ''),
     state: String(field(row, 'state', 'display_value') ?? ''),
     urgency: parseLevel(field(row, 'urgency', 'value')),
-    createdAt: parseTime(field(row, 'sys_created_on', 'value')),
+    // When it was raised: opened_at, which may be backdated, else when the record was made.
+    createdAt: parseTime(field(row, 'opened_at', 'value')) ?? parseTime(field(row, 'sys_created_on', 'value')),
     updatedAt: parseTime(field(row, 'sys_updated_on', 'value')),
     ...(resolvedAt === null ? {} : { resolvedAt }),
     ...(typeof correlationId === 'string' && correlationId ? { correlationId } : {}),
@@ -213,8 +214,8 @@ export class ServiceNowTickets implements TicketAdapter {
     const caller = await this.callerId();
     if (!caller.ok) return caller;
     const params = new URLSearchParams({
-      sysparm_query: `caller_id=${caller.value}^ORDERBYDESCsys_created_on`,
-      sysparm_limit: '10',
+      sysparm_query: `caller_id=${caller.value}^ORDERBYDESCopened_at`,
+      sysparm_limit: '25',
       sysparm_fields: LIST_FIELDS,
       sysparm_display_value: 'all',
     });
