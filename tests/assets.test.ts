@@ -53,26 +53,26 @@ describe('session asset', () => {
 describe('greeting and prompt', () => {
   it('greets with the device and lists its guides', () => {
     const s = at('room-4b-display');
-    expect(buildGreeting(s)).toBe("Hi Priya, this is ASK IT. You're at meeting room 4B's display. What's going wrong?");
+    expect(buildGreeting(s)).toBe("Hi Deepak, this is ASK IT. You're at meeting room 4B's display. What's going wrong?");
     const p = buildSystemPrompt(NOW, 'employee', null, s.asset);
-    expect(p).toMatch(/This call\n- Priya scanned the QR sticker on Meeting room 4B display, Bengaluru, 4th floor\./);
+    expect(p).toMatch(/This call\n- Deepak scanned the QR sticker on Meeting room 4B display, Bengaluru, 4th floor\./);
     expect(p).toMatch(/external-monitor, screen-sharing/);
     expect(p).not.toMatch(/addTicketNote with ticket/);
   });
   it('says so when the device already has an open ticket', () => {
     const s = at('printer-3f', OPEN);
-    expect(buildGreeting(s)).toBe("Hi Priya, this is ASK IT. You're at the printer by the 3rd floor pantry. It already has an open ticket, I-N-C one one nine six two, so I'll add what you tell me to it. What's going wrong?");
+    expect(buildGreeting(s)).toBe("Hi Deepak, this is ASK IT. You're at the printer by the 3rd floor pantry. It already has an open ticket, I-N-C one one nine six two, so I'll add what you tell me to it. What's going wrong?");
     expect(buildSystemPrompt(NOW, 'employee', null, s.asset)).toMatch(/already has open ticket INC0011962, Display shows no signal\. Do not raise a duplicate: call addTicketNote with ticket INC0011962/);
   });
   it('lets a ringing follow-up win, and ignores unknown or missing assets', () => {
     const f = { number: 'INC0010013', summary: 'GlobalProtect VPN not connecting' };
     const s = at('room-4b-display');
-    expect(buildGreeting(s, 'employee', f)).toMatch(/^Hi Priya, this is ASK IT calling about I-N-C one zero zero one three/);
+    expect(buildGreeting(s, 'employee', f)).toMatch(/^Hi Deepak, this is ASK IT calling about I-N-C one zero zero one three/);
     const p = buildSystemPrompt(NOW, 'employee', f, s.asset);
-    expect(p).toMatch(/You called Priya back about INC0010013/);
+    expect(p).toMatch(/You called Deepak back about INC0010013/);
     expect(p).not.toMatch(/QR sticker/);
     expect(buildGreeting(s, 'itdesk')).toMatch(/^Hi, I'm your IT Admin voice agent/);
-    expect(buildGreeting(at('nope'))).toMatch(/Is this about that, or something new\?$/);
+    expect(buildGreeting(at('nope'))).toBe('Hi Deepak, ASK IT here.');
     expect(buildSystemPrompt(NOW, 'employee', null, { id: 'nope', ticket: null })).not.toMatch(/This call/);
   });
 });
@@ -126,7 +126,7 @@ describe('tickets from a scanned device', () => {
     const out = await call(prep.state, 'confirmAction', { code: codeOf(prep.result) }, { tickets: { addNote } });
     expect(out.result.ok).toBe(true);
     expect(out.result.say).toMatch(/Added your report to I-N-C one one nine six two/);
-    expect(addNote).toHaveBeenCalledWith({ number: 'INC0011962', sysId: 'sn-1962' }, expect.stringMatching(/Priya Sharma .*QR sticker.*Jams on every page/));
+    expect(addNote).toHaveBeenCalledWith({ number: 'INC0011962', sysId: 'sn-1962' }, expect.stringMatching(/Deepak Gowda .*QR sticker.*Jams on every page/));
     expect(out.state.metrics.duplicatesAvoided).toBe(1);
     const repeat = await call(out.state, 'confirmAction', { code: codeOf(prep.result) }, { tickets: { addNote } });
     expect(repeat.state.metrics.duplicatesAvoided).toBe(1);

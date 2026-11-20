@@ -49,7 +49,7 @@ describe('confirmFix', () => {
     expect(out.state.followUp).toBeNull();
     expect(out.state.followUpLog?.rung).not.toContain(FIGMA.number);
     expect(out.alerts).toHaveLength(1);
-    expect(out.alerts[0].card).toMatchObject({ key: FIGMA.number, ticket: FIGMA.number, status: 'reopened', title: 'Figma licence request', person: 'Priya Sharma', detail: 'Reopened at high urgency, caller says the fix did not work: still says no licence' });
+    expect(out.alerts[0].card).toMatchObject({ key: FIGMA.number, ticket: FIGMA.number, status: 'reopened', title: 'Figma licence request', person: 'Deepak Gowda', detail: 'Reopened at high urgency, caller says the fix did not work: still says no licence' });
     expect(out.result.say).toMatch(/reopened I-N-C one one nine nine four at high urgency/);
     expect(out.result.say).toMatch(/alerting the IT channel/);
   });
@@ -145,7 +145,7 @@ describe('what makes a page ring', () => {
   });
   it('the IT desk resolving her ticket by voice rings at once', async () => {
     const s = freshState();
-    const row = { ...s.itdesk.backlog[0], number: FIGMA.number, sysId: FIGMA.sysId, summary: 'Figma licence request', state: '2', stateLabel: 'In Progress', caller: 'Priya Sharma' };
+    const row = { ...s.itdesk.backlog[0], number: FIGMA.number, sysId: FIGMA.sysId, summary: 'Figma licence request', state: '2', stateLabel: 'In Progress', caller: 'Deepak Gowda' };
     s.itdesk.backlog.push(row);
     const prep = await call(s, 'prepareIncidentUpdate', { ticket: 'INC0011994', assignedTo: '', assignmentGroup: '', state: 'resolved', holdReason: '', urgency: '', impact: '', category: '', workNote: '', comment: '', resolutionNotes: 'Licence assigned' });
     expect(prep.status).toBe(200);

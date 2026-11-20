@@ -13,7 +13,7 @@ const CARD: CardUpdate = {
   key: 'NMB-7K2:ISS-101',
   status: 'ticket_raised',
   title: 'VPN <drops> & reconnects',
-  person: 'Priya Sharma',
+  person: 'Deepak Gowda',
   device: 'NB-2231',
   ticket: 'INC0012001',
   detail: 'Raised as INC0012001, high urgency',
@@ -90,12 +90,12 @@ describe('card blocks', () => {
     const blocks = cardBlocks(CARD);
     expect(blocks).toEqual([
       { type: 'section', text: { type: 'mrkdwn', text: ':ticket: *Ticket raised* · VPN &lt;drops&gt; &amp; reconnects' } },
-      { type: 'context', elements: [{ type: 'mrkdwn', text: 'Priya Sharma · NB-2231 · INC0012001 · updated 9:40 AM' }] },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: 'Deepak Gowda · NB-2231 · INC0012001 · updated 9:40 AM' }] },
     ]);
   });
   it('neutralises mentions and leaves out missing parts', () => {
     const blocks = cardBlocks({ ...CARD, title: '<!channel> help @here', device: undefined, ticket: undefined, status: 'in_progress' });
     expect(JSON.stringify(blocks)).not.toMatch(/<!channel>/);
-    expect(blocks[1]).toEqual({ type: 'context', elements: [{ type: 'mrkdwn', text: 'Priya Sharma · no ticket yet · updated 9:40 AM' }] });
+    expect(blocks[1]).toEqual({ type: 'context', elements: [{ type: 'mrkdwn', text: 'Deepak Gowda · no ticket yet · updated 9:40 AM' }] });
   });
 });

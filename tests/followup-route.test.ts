@@ -184,7 +184,7 @@ describe('answering a follow-up call', () => {
     await ringFor(code);
     expect((await invite(code, { followUp: 'INC0011994' })).status).toBe(200);
     const llm = bodies[0].properties.llm;
-    expect(llm.greeting_message).toBe('Hi Priya, this is ASK IT calling about I-N-C one one nine nine four, Figma licence request. IT marked it resolved. Is it working for you now?');
+    expect(llm.greeting_message).toBe('Hi Deepak, this is ASK IT calling about I-N-C one one nine nine four, Figma licence request. IT marked it resolved. Is it working for you now?');
     expect(llm.system_messages[0].content).toMatch(/call confirmFix with ticket INC0011994/);
     const state = await view(code);
     expect(state.followUp).toMatchObject({ number: 'INC0011994', status: 'answered' });
@@ -195,7 +195,7 @@ describe('answering a follow-up call', () => {
     const code = await newSession();
     await ringFor(code, { status: 'snoozed', snoozedUntil: Date.now() + MINUTE });
     expect((await invite(code, { followUp: 'INC0011994' })).status).toBe(200);
-    expect(bodies[0].properties.llm.greeting_message).toMatch(/What can I help you with\?$/);
+    expect(bodies[0].properties.llm.greeting_message).toBe('Hi Deepak, ASK IT here.');
     expect(bodies[0].properties.llm.system_messages[0].content).not.toMatch(/This call/);
     expect((await view(code)).followUp.status).toBe('snoozed');
   });
@@ -324,13 +324,23 @@ describe('greeting at call start', () => {
   const invite = (code: string, extra: Record<string, unknown> = {}) =>
     inviteRoute(new NextRequest('http://localhost/api/invite-agent', { method: 'POST', body: JSON.stringify({ requester_id: '4321', channel_name: 'ch-1', session: code, ...extra }), headers: { 'content-type': 'application/json' } }));
 
-  it('names her open ticket and briefs the agent with her tickets', async () => {
+  it('greets briefly and briefs the agent with their tickets and the opener', async () => {
     const bodies = mockAgora();
     const code = await newSession();
     expect((await invite(code)).status).toBe(200);
     const llm = bodies[0].properties.llm;
-    expect(llm.greeting_message).toMatch(/I see your ticket I-N-C one one nine nine four, Figma licence request, is still in progress\. Is this about that, or something new\?$/);
-    expect(llm.system_messages[0].content).toMatch(/Her open tickets\n- INC0011994, Figma licence request: in progress, low urgency\./);
+    expect(llm.greeting_message).toBe('Hi Deepak, ASK IT here.');
+    expect(llm.system_messages[0].content).toMatch(/Deepak's open tickets\n.*\n- INC0011994, Figma licence request: in progress, low urgency\./);
+    expect(llm.system_messages[0].content).toMatch(/Call opener\n- If Deepak stays quiet after your greeting, you add: "What can I help you with today\?"/);
+    expect((await view(code)).call.opener).toBe('What can I help you with today?');
+  });
+  it('gives a returned call no opener, since its greeting already asks', async () => {
+    const bodies = mockAgora();
+    const code = await newSession();
+    await ringFor(code);
+    expect((await invite(code, { followUp: 'INC0011994' })).status).toBe(200);
+    expect(bodies[0].properties.llm.system_messages[0].content).not.toMatch(/Call opener/);
+    expect((await view(code)).call.opener).toBeUndefined();
   });
   it('greets an answered reminder about what she asked to check', async () => {
     const bodies = mockAgora();
@@ -339,8 +349,8 @@ describe('greeting at call start', () => {
     await get(code);
     expect((await invite(code, { followUp: 'RM-7' })).status).toBe(200);
     const llm = bodies[0].properties.llm;
-    expect(llm.greeting_message).toBe("Hi Priya, it's ASK IT checking back about the Figma licence, I-N-C one one nine nine four. Is it working now?");
-    expect(llm.system_messages[0].content).toMatch(/This call\n- Priya asked you to check back about the Figma licence, ticket INC0011994/);
+    expect(llm.greeting_message).toBe("Hi Deepak, it's ASK IT checking back about the Figma licence, I-N-C one one nine nine four. Is it working now?");
+    expect(llm.system_messages[0].content).toMatch(/This call\n- Deepak asked you to check back about the Figma licence, ticket INC0011994/);
     const state = await view(code);
     expect(state.followUp).toMatchObject({ reminder: 'RM-7', status: 'answered' });
     expect(state.events.at(0).title).toBe('Reminder call started: the Figma licence');

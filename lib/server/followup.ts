@@ -22,7 +22,7 @@ async function markFresh(store: VersionedStore, code: string, now: number) {
   await store.setIfVersion(freshKey(code), String(now), hit?.version ?? 0, FRESH_SECONDS);
 }
 
-// Lists her tickets and applies the list; a failed or, with a timeout, slow list leaves the state as it was.
+// Lists the employee's tickets and applies the list; a failed or, with a timeout, slow list leaves the state as it was.
 async function listAndApply(store: VersionedStore, code: string, state: SessionState, now: number, makeTickets: MakeTickets, timeoutMs?: number): Promise<SessionState> {
   const tickets = makeTickets(state);
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -45,7 +45,7 @@ export async function checkFollowUps(store: VersionedStore, code: string, now: n
   return (await updateSession(store, code, (s) => ({ state: settleRings(s, now) }))).state;
 }
 
-// Before a call: her tickets from ServiceNow unless listed in the last 30 s, waiting at most 2 s. Any failure keeps what the session knows.
+// Before a call: the employee's tickets from ServiceNow unless listed in the last 30 s, waiting at most 2 s. Any failure keeps what the session knows.
 export async function refreshTickets(store: VersionedStore, code: string, now: number, makeTickets: MakeTickets = defaultTickets(now)): Promise<SessionState | null> {
   const hit = await loadSession(store, code);
   if (!hit) return null;

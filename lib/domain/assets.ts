@@ -1,3 +1,5 @@
+import { EMPLOYEE } from './company';
+
 // Devices with a QR sticker: scanning one opens ASK IT already knowing the device.
 
 export interface Asset {
@@ -15,7 +17,7 @@ const ASSET_ID = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 export const ASSETS: Asset[] = [
   { id: 'room-4b-display', name: 'Meeting room 4B display', location: 'Bengaluru, 4th floor', spoken: "at meeting room 4B's display", guides: ['external-monitor', 'screen-sharing'] },
   { id: 'printer-3f', name: 'Printer, 3rd floor', location: 'Bengaluru, 3rd floor, near the pantry', spoken: 'at the printer by the 3rd floor pantry', guides: ['printer'] },
-  { id: 'laptop-nb-2231', name: "Priya's MacBook Pro", location: 'NB-2231, assigned to Priya Sharma', spoken: "on Priya's MacBook Pro", guides: ['slow-laptop'] },
+  { id: 'laptop-nb-2231', name: `${EMPLOYEE.firstName}'s MacBook Pro`, location: `NB-2231, assigned to ${EMPLOYEE.name}`, spoken: `on ${EMPLOYEE.firstName}'s MacBook Pro`, guides: ['slow-laptop'] },
 ];
 
 export function findAsset(raw: unknown): Asset | undefined {

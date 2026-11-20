@@ -25,7 +25,7 @@ describe('IT desk persona tools', () => {
   it('are separate from the employee tools', () => {
     expect(toolsFor('itdesk').map((t) => t.name).sort()).toEqual(['cancelAction', 'confirmAction', 'countIncidents', 'generateReport', 'listQueue', 'listResources', 'openIncident', 'prepareIncidentUpdate', 'requestUpdate', 'showDashboard', 'showImpact', 'showResource']);
     const employee = toolsFor('employee').map((t) => t.name);
-    expect(employee).toHaveLength(21);
+    expect(employee).toHaveLength(22);
     expect(employee).not.toContain('listQueue');
   });
 });

@@ -14,6 +14,12 @@ const names = (data: unknown) => people(data).map((p) => p.name);
 const list = (args: { team?: string; status?: string }, state = freshState(), o: Parameters<typeof call>[3] = {}) => call(state, 'listResources', { team: '', status: '', ...args }, o);
 const show = (name: string, state = freshState(), o: Parameters<typeof call>[3] = {}) => call(state, 'showResource', { name }, o);
 const opened = async (ticket: string, state = freshState()) => (await call(state, 'openIncident', { ticket })).state;
+// The same incident with nobody on it yet: only then is assigning it offered.
+const unowned = async (ticket: string) => {
+  const s = await opened(ticket);
+  s.itdesk.current = { ...s.itdesk.current!, assignee: null };
+  return s;
+};
 
 // Gives a simulated engineer another open incident.
 function busy(state: SessionState, name: string, n: number) {
@@ -35,7 +41,10 @@ describe('simulated roster', () => {
 
 describe('listResources', () => {
   it('names who is free in a team and asks who should take the open incident', async () => {
-    const out = await list({ team: 'Finance Systems', status: 'available' }, await opened('13012'));
+    const owned = await list({ team: 'Finance Systems', status: 'available' }, await opened('13012'));
+    expect(owned.result.say).toBe('3 people in Finance Systems are free: Neha Joshi, Priyanka Das and Suresh Babu.');
+    expect(owned.result.next).toBeUndefined();
+    const out = await list({ team: 'Finance Systems', status: 'available' }, await unowned('13012'));
     expect(out.result.say).toBe('3 people in Finance Systems are free: Neha Joshi, Priyanka Das and Suresh Babu. Who should take it?');
     expect(names(out.result.data)).toEqual(['Neha Joshi', 'Priyanka Das', 'Suresh Babu']);
     expect(out.result.next).toMatch(/prepareIncidentUpdate with assignedTo/);
@@ -114,7 +123,7 @@ describe('listResources', () => {
     expect((await list({ team: 'all' })).result.say).toBe("The IT teams have 20 people: 13 available and 7 busy. They're on your screen.");
   });
   it('suggests the least busy person when everyone is busy, and shows the whole team', async () => {
-    const s = await opened('13014');
+    const s = await unowned('13014');
     busy(s, 'Aditya Kulkarni', 1);
     busy(s, 'Aditya Kulkarni', 2);
     busy(s, 'Imran Sheikh', 3);
@@ -198,7 +207,8 @@ describe('showResource', () => {
   });
   it('describes a free engineer and offers the open incident', async () => {
     expect((await show('Neha Joshi')).result.say).toBe('Neha Joshi is in Finance Systems and is free right now.');
-    const out = await show('arjun', await opened('13012'));
+    expect((await show('arjun', await opened('13012'))).result.say).not.toMatch(/Should I assign/);
+    const out = await show('arjun', await unowned('13012'));
     expect(out.result.say).toBe('Arjun Rao is in Network and has 1 open ticket: I-N-C one three zero zero nine, Branch office Wi-Fi dropping every hour, moderate priority. Should I assign it to Arjun?');
     expect(out.result.next).toMatch(/prepareIncidentUpdate with assignedTo set to Arjun Rao and assignmentGroup Network\./);
     expect((await show('Karan', await opened('13012'))).result.say).not.toMatch(/Should I assign/);

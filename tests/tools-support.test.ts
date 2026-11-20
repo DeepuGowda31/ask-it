@@ -62,11 +62,11 @@ describe('followOutage', () => {
     expect(prep.state.metrics).toMatchObject({ duplicatesAvoided: 0, minutesSaved: 0 });
     expect(prep.alerts).toEqual([]);
   });
-  it('adds Priya to the master incident on her yes, instead of a duplicate ticket', async () => {
+  it('adds Deepak to the master incident on their yes, instead of a duplicate ticket', async () => {
     const addNote = vi.fn(async () => success(null));
     const out = await confirmed(freshState(), 'followOutage', { incident: 'I N C 11950' }, { tickets: { addNote } });
     expect(out.status).toBe(200);
-    expect(addNote).toHaveBeenCalledWith({ number: 'INC0011950', sysId: null }, expect.stringMatching(/Priya Sharma.*NB-2231/));
+    expect(addNote).toHaveBeenCalledWith({ number: 'INC0011950', sysId: null }, expect.stringMatching(/Deepak Gowda.*NB-2231/));
     expect(out.state.outages[0]).toMatchObject({ followed: true, affected: 15 });
     expect(out.state.metrics).toMatchObject({ duplicatesAvoided: 1, minutesSaved: 10 });
     expect(out.result.say).toMatch(/no duplicate ticket/i);
@@ -236,20 +236,22 @@ describe('markResolved', () => {
     expect(prep.state.troubleshooting?.status).toBe('fixed');
     expect(prep.alerts).toEqual([]);
   });
-  it('logs a resolved incident on her yes and counts the deflection once', async () => {
+  it('logs one incident already resolved on their yes and counts the deflection once', async () => {
     const create = vi.fn(async (_t: NewTicket) => success({ number: 'INC0012001', sysId: 'sys-1' }));
-    const resolve = vi.fn(async () => success(null));
-    const out = await confirmed(await fixed(), 'markResolved', { summary: 'VPN fixed by reconnecting GlobalProtect' }, { tickets: { create, resolve } });
+    const out = await confirmed(await fixed(), 'markResolved', { summary: 'VPN fixed by reconnecting GlobalProtect' }, { tickets: { create } });
     expect(out.status).toBe(200);
-    expect(create.mock.calls[0][0].correlationId).toMatch(/^askit:NMB-7K2:\d+$/);
-    expect(create.mock.calls[0][0]).toMatchObject({ shortDescription: 'Resolved by ASK IT: VPN fixed by reconnecting GlobalProtect', category: 'network' });
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(create.mock.calls[0][0].correlationId).toMatch(/^askit:NMB-7K2:fix\d+$/);
+    expect(create.mock.calls[0][0]).toMatchObject({ shortDescription: 'VPN fixed by reconnecting GlobalProtect', category: 'network', urgency: 3, impact: 3 });
     expect(create.mock.calls[0][0].description).toMatch(/1\. Click the GlobalProtect globe.*Result: fixed it/);
-    expect(resolve).toHaveBeenCalledWith({ number: 'INC0012001', sysId: 'sys-1' }, expect.stringContaining('VPN fixed'));
+    expect(create.mock.calls[0][0].resolution).toEqual({ at: NOW, notes: expect.stringMatching(/^Resolved on the call by ASK IT\. VPN fixed by reconnecting GlobalProtect\. Steps that worked\. Click the GlobalProtect globe/) });
+    expect(create.mock.calls[0][0].resolution!.notes).not.toMatch(/[:;]|\s[-–—]\s/);
+    expect(out.state.tickets[0]).toMatchObject({ summary: 'VPN fixed by reconnecting GlobalProtect', fixedOnCall: true });
     expect(out.state.tickets[0]).toMatchObject({ number: 'INC0012001', state: 'Resolved', raisedHere: true });
     expect(out.state.metrics).toMatchObject({ resolvedByAgent: 1, minutesSaved: 20 });
     expect(out.state.troubleshooting?.status).toBe('resolved');
     expect(out.result.next).toMatch(/scheduleReminder/);
-    const again = await call(out.state, 'markResolved', { summary: 'again' }, { tickets: { create, resolve } });
+    const again = await call(out.state, 'markResolved', { summary: 'again' }, { tickets: { create } });
     expect(again.result.say).toMatch(/already/i);
     expect(again.result.data).toMatchObject({ alreadyResolved: true, number: 'INC0012001' });
     expect(create).toHaveBeenCalledTimes(1);
@@ -259,24 +261,22 @@ describe('markResolved', () => {
     const out = await confirmed(await fixed(), 'markResolved', { summary: 'VPN fixed' });
     expect(out.state.tickets[0]).toMatchObject({ number: 'INC0012001', source: 'simulated', state: 'Resolved' });
   });
-  it('keeps a local record when ServiceNow refuses', async () => {
+  it('still counts the fix when ServiceNow refuses, keeps a local record to retry, and does not bring the failure up', async () => {
     const out = await confirmed(await fixed(), 'markResolved', { summary: 'VPN fixed' }, { tickets: { mode: 'live', create: async () => failure({ kind: 'rejected', status: 403 }) } });
-    expect(out.state.tickets[0]).toMatchObject({ number: expect.stringMatching(/^LOCAL-/), syncFailed: true, state: 'Resolved' });
-    expect(out.result.say).toMatch(/couldn't log it in ServiceNow: ServiceNow rejected the request/);
+    expect(out.status).toBe(200);
+    expect(out.state.tickets[0]).toMatchObject({ number: expect.stringMatching(/^LOCAL-/), syncFailed: true, state: 'Resolved', raisedHere: true });
+    expect(out.result.say).toBe("Glad it's fixed. Anything else I can help with?");
+    expect(out.result.next).toMatch(/ServiceNow did not take the record.*retried once at wrap up.*only if they ask/);
+    expect(out.result.data).toMatchObject({ synced: false });
     expect(out.state.metrics.resolvedByAgent).toBe(1);
+    expect(out.state.unsyncedFix).toMatchObject({ localRef: out.state.tickets[0].number, ticket: { shortDescription: 'VPN fixed', correlationId: expect.stringMatching(/^askit:NMB-7K2:fix/) } });
   });
-  it('is honest when ServiceNow is down or only half done', async () => {
-    const down = await confirmed(await fixed(), 'markResolved', { summary: 'VPN fixed' }, { tickets: { mode: 'live', create: async () => failure({ kind: 'unavailable', status: 503 }) } });
-    expect(down.result.say).toMatch(/^Glad it's fixed\. I couldn't log it in ServiceNow: ServiceNow is having problems right now\./);
-    expect(down.result.say).not.toMatch(/Logged as resolved/);
-    const half = await confirmed(await fixed(), 'markResolved', { summary: 'VPN fixed' }, { tickets: { create: async () => success({ number: 'INC0012001', sysId: 's1' }), resolve: async () => failure({ kind: 'timeout' }) } });
-    expect(half.result.say).toMatch(/logged it as I-N-C one two zero zero one, but couldn't close it in ServiceNow/);
-    expect(half.state.tickets[0]).toMatchObject({ number: 'INC0012001', state: 'New', syncFailed: true });
-  });
-  it('does not claim failure when the outcome is unknown', async () => {
-    const out = await confirmed(await fixed(), 'markResolved', { summary: 'VPN fixed' }, { tickets: { mode: 'live', create: async () => failure({ kind: 'timeout' }) } });
-    expect(out.result.say).toMatch(/not sure ServiceNow logged it/);
-    expect(out.result.say).not.toMatch(/couldn't log/);
+  it('says the same when ServiceNow is down or does not answer in time', async () => {
+    for (const error of [{ kind: 'unavailable', status: 503 }, { kind: 'timeout' }] as const) {
+      const out = await confirmed(await fixed(), 'markResolved', { summary: 'VPN fixed' }, { tickets: { mode: 'live', create: async () => failure(error) } });
+      expect(out.result.say).toBe("Glad it's fixed. Anything else I can help with?");
+      expect(out.state.unsyncedFix).toBeTruthy();
+    }
   });
   it('discards a cancelled resolution without logging it', async () => {
     const create = vi.fn();
@@ -324,7 +324,7 @@ describe('wrapUpCall', () => {
     s = (await confirmed(s, 'markResolved', { summary: 'VPN reconnect fixed it' })).state;
     const out = await call(s, 'wrapUpCall', {}, { notifyMode: 'live' });
     const posted = out.alerts[0].text;
-    expect(posted).toMatch(/Priya Sharma/);
+    expect(posted).toMatch(/Deepak Gowda/);
     expect(posted).toMatch(/INC0012001/);
     expect(posted).toMatch(/INC0011950/);
     expect(out.state.documents[0]).toMatchObject({ kind: 'callSummary' });

@@ -9,8 +9,8 @@ describe('session view', () => {
   it('shows the seed for both screens without internal ids', () => {
     const v = buildSessionView(freshState(), NOW, 1, LIVE);
     expect(v.version).toBe(1);
-    expect(v.employee.name).toBe('Priya Sharma');
-    expect(v.account).toEqual({ email: 'priya.sharma@nimbuslabs.example', locked: true, lastPasswordReset: expect.any(Number), factors: ['otp'], factorsKnown: true, source: 'simulated', checkedAt: null });
+    expect(v.employee.name).toBe('Deepak Gowda');
+    expect(v.account).toEqual({ email: 'deepak.gowda@nimbuslabs.example', locked: true, lastPasswordReset: expect.any(Number), factors: ['otp'], factorsKnown: true, source: 'simulated', checkedAt: null });
     expect(v.tickets.map((t) => t.number)).toEqual(['INC0011994', 'INC0011987']);
     expect(v.tickets[0]).not.toHaveProperty('sysId');
     expect(v.tickets.map((t) => t.open)).toEqual([true, false]);

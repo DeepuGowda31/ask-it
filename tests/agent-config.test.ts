@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { IT_INTRO, buildAgoraTools, buildGreeting, buildSystemPrompt, missingEnv, resolvePublicBaseUrl, murfConfig } from '@/lib/agent/config';
 import { getTool, toolsFor } from '@/lib/domain/tools';
-import { DAY } from '@/lib/domain/time';
 import { NOW, confirmed, freshState } from './helpers';
 
 describe('public base URL for tool callbacks', () => {
@@ -62,7 +61,7 @@ describe('prompt and greeting', () => {
   const p = buildSystemPrompt(NOW);
   it('says who, where, when and on what device', () => {
     expect(p).toMatch(/^You are ASK IT, the voice IT helpdesk of Nimbus Labs/);
-    expect(p).toMatch(/Priya Sharma/);
+    expect(p).toMatch(/Deepak Gowda/);
     expect(p).toMatch(/NB-2231, a MacBook Pro on macOS 15/);
     expect(p).toMatch(/GlobalProtect/);
     expect(p).toMatch(/Wednesday 18 November 2026, 9:30 AM/);
@@ -76,7 +75,7 @@ describe('prompt and greeting', () => {
     expect(p).toMatch(/explicit yes/i);
     expect(p).toMatch(/confirmAction/);
     expect(p).toMatch(/checkIdentity/);
-    expect(p).toMatch(/After an account action, ask whether Priya can sign in now, and call markResolved when she says yes/);
+    expect(p).toMatch(/After an account action, ask whether Deepak can sign in now, and call markResolved when they say yes/);
     expect(p).toMatch(/lost or stolen.*act fast.*prepareSecurityLockdown.*no email code/i);
     expect(p).toMatch(/network, call quality, audio, slowness or sign-in problem.*runDiagnostics first.*finding with its number.*startTroubleshooting/);
     expect(p).toMatch(/`next`.*never read it aloud/);
@@ -93,47 +92,28 @@ describe('prompt and greeting', () => {
   it('never mentions the old product', () => {
     expect(p).not.toMatch(/workday|copilot|okta/i);
   });
-  it('greets with the active outage when she has no open ticket, built on the server', async () => {
-    const s = freshState();
-    s.tickets = s.tickets.filter((t) => t.state === 'Resolved');
-    const g = buildGreeting(s);
-    expect(g).toBe('Hi Priya, this is ASK IT, the Nimbus Labs IT helpdesk. Heads-up: SAP Concur expense submissions failing right now, and IT is working on it. What can I help you with?');
-    expect(g).not.toMatch(/[*#_`]/);
-    const followed = (await confirmed(s, 'followOutage', { incident: '' })).state;
-    expect(buildGreeting(followed)).toBe('Hi Priya, this is ASK IT, the Nimbus Labs IT helpdesk. What can I help you with?');
-  });
-  it('names her most relevant open ticket and asks whether the call is about it', async () => {
+  it('greets a normal employee call with the first name only, whatever is open', async () => {
+    expect(buildGreeting(freshState())).toBe('Hi Deepak, ASK IT here.');
     const followed = (await confirmed(freshState(), 'followOutage', { incident: '' })).state;
-    expect(buildGreeting(followed)).toBe('Hi Priya, this is ASK IT. I see your ticket I-N-C one one nine nine four, Figma licence request, is still in progress. Is this about that, or something new?');
-  });
-  it('keeps the outage heads-up next to her ticket, in two sentences and the question', () => {
-    const g = buildGreeting(freshState());
-    expect(g).toBe('Hi Priya, this is ASK IT, and heads-up: SAP Concur expense submissions failing right now. I see your ticket I-N-C one one nine nine four, Figma licence request, is still in progress. Is this about that, or something new?');
-    expect(g.split(/(?<=[.?])\s/)).toHaveLength(3);
-  });
-  it('picks the latest updated open ticket that ServiceNow has, and says "open" for new ones', () => {
+    expect(buildGreeting(followed)).toBe('Hi Deepak, ASK IT here.');
     const s = freshState();
     s.outages = [];
-    s.tickets.unshift(
-      { number: 'LOCAL-9', sysId: null, summary: 'Not sent', state: 'Not submitted', urgency: 2, source: 'live', createdAt: NOW, updatedAt: NOW, syncFailed: true },
-      { number: 'INC0012005', sysId: 's5', summary: 'Resolved by ASK IT: VPN fixed', state: 'New', urgency: 3, source: 'live', createdAt: NOW, updatedAt: NOW, syncFailed: true },
-      { number: 'INC0012003', sysId: 's3', summary: 'Dock (USB-C) [left port] not charging', state: 'New', urgency: 2, source: 'live', createdAt: NOW - 3 * DAY, updatedAt: NOW - 60_000 },
-      { number: 'INC0012004', sysId: 's4', summary: 'Mouse broken', state: 'Resolved', urgency: 3, source: 'live', createdAt: NOW, updatedAt: NOW },
-    );
-    expect(buildGreeting(s)).toBe('Hi Priya, this is ASK IT. I see your ticket I-N-C one two zero zero three, Dock USB-C left port not charging, is still open. Is this about that, or something new?');
+    s.tickets = [];
+    expect(buildGreeting(s)).toBe('Hi Deepak, ASK IT here.');
   });
-  it('lets a scanned device win over her ticket, and a follow-up or reminder call win over both', () => {
+  it('lets a scanned device keep its own greeting, and a follow-up or reminder call win over it', () => {
     const s = freshState();
     s.asset = { id: 'printer-3f', ticket: null };
-    expect(buildGreeting(s)).toMatch(/^Hi Priya, this is ASK IT\. You're at the printer by the 3rd floor pantry\. What's going wrong\?$/);
+    expect(buildGreeting(s)).toMatch(/^Hi Deepak, this is ASK IT\. You're at the printer by the 3rd floor pantry\. What's going wrong\?$/);
     expect(buildGreeting(s, 'employee', { number: 'INC0010013', summary: 'VPN down' })).toMatch(/calling about I-N-C one zero zero one three/);
-    expect(buildGreeting(s, 'employee', { number: '', summary: 'the VPN fix', reminder: 'RM-1' })).toBe("Hi Priya, it's ASK IT checking back about the VPN fix. Is it working now?");
+    expect(buildGreeting(s, 'employee', { number: '', summary: 'the VPN fix', reminder: 'RM-1' })).toBe("Hi Deepak, it's ASK IT checking back about the VPN fix. Is it working now?");
   });
-  it('briefs the agent with her open tickets from the first turn', () => {
+  it('briefs the agent with their open tickets from the first turn, without a rundown', () => {
     const p = buildSystemPrompt(NOW, 'employee', null, null, freshState().tickets);
-    expect(p).toMatch(/Her open tickets\n- INC0011994, Figma licence request: in progress, low urgency\./);
+    expect(p).toMatch(/Deepak's open tickets\n- Do not open with a rundown of tickets\..*\n- INC0011994, Figma licence request: in progress, low urgency\./);
+    expect(p).toMatch(/Do not open with a rundown of tickets/);
     expect(p).not.toMatch(/INC0011987/);
-    expect(buildSystemPrompt(NOW)).toMatch(/Her open tickets\n- None right now\./);
+    expect(buildSystemPrompt(NOW)).toMatch(/Deepak's open tickets\n.*\n- None right now\./);
     const many = Array.from({ length: 8 }, (_, i) => ({ ...freshState().tickets[0], number: `INC00200${i}`, summary: `Issue\n${i}` }));
     const listed = buildSystemPrompt(NOW, 'employee', null, null, many).match(/^- INC00200/gm) ?? [];
     expect(listed).toHaveLength(5);
@@ -141,30 +121,42 @@ describe('prompt and greeting', () => {
   });
   it('briefs a reminder call', () => {
     const p = buildSystemPrompt(NOW, 'employee', { number: 'INC0011994', summary: 'the Figma licence', reminder: 'RM-1' });
-    expect(p).toMatch(/This call\n- Priya asked you to check back about the Figma licence, ticket INC0011994/);
+    expect(p).toMatch(/This call\n- Deepak asked you to check back about the Figma licence, ticket INC0011994/);
     expect(p).toMatch(/Do not offer another reminder/);
     expect(p).not.toMatch(/call confirmFix with ticket/);
   });
   it('asks for a yes before every ticket change, and offers one reminder', () => {
     expect(p).toMatch(/new tickets, escalations, ticket notes, joining an outage and logging a fix take two steps/);
     expect(p).toMatch(/prepareTicket, prepareEscalation, addTicketNote, followOutage or markResolved/);
-    expect(p).toMatch(/Never change a ticket or log a fix without her yes/);
+    expect(p).toMatch(/Never change a ticket or log a fix without their yes/);
     expect(p).toMatch(/After you raise a ticket or finish a fix, offer one reminder.*scheduleReminder/);
     expect(p).toMatch(/at most once per call/);
   });
-  it('tells the agent that her answer on a follow-up call is the confirmation', () => {
-    expect(p).toMatch(/confirmFix.*fixed closes.*not_fixed reopens.*her answer is the confirmation/i);
-    expect(getTool('confirmFix')!.description).toMatch(/Her spoken answer to the follow-up question is the approval: call it straight away, never ask for another yes\./);
+  it('tells the agent that their answer on a follow-up call is the confirmation', () => {
+    expect(p).toMatch(/confirmFix.*fixed closes.*not_fixed reopens.*their answer is the confirmation/i);
+    expect(getTool('confirmFix')!.description).toMatch(/Their spoken answer is the approval: call it straight away, never ask for another yes\./);
     expect(p).not.toMatch(/This call/);
   });
   it('greets a follow-up call with the ticket and asks whether it works now', () => {
     const f = { number: 'INC0010013', summary: 'GlobalProtect VPN not connecting' };
-    expect(buildGreeting(freshState(), 'employee', f)).toBe('Hi Priya, this is ASK IT calling about I-N-C one zero zero one three, GlobalProtect VPN not connecting. IT marked it resolved. Is it working for you now?');
+    expect(buildGreeting(freshState(), 'employee', f)).toBe('Hi Deepak, this is ASK IT calling about I-N-C one zero zero one three, GlobalProtect VPN not connecting. IT marked it resolved. Is it working for you now?');
     const prompt = buildSystemPrompt(NOW, 'employee', f);
-    expect(prompt).toMatch(/This call\n- You called Priya back about INC0010013, GlobalProtect VPN not connecting/);
+    expect(prompt).toMatch(/This call\n- You called Deepak back about INC0010013, GlobalProtect VPN not connecting/);
     expect(prompt).toMatch(/call confirmFix with ticket INC0010013/);
     expect(prompt).toMatch(/Do not ask for another yes/);
     expect(buildGreeting(freshState(), 'itdesk', f)).toMatch(/^Hi, I'm your IT Admin voice agent/);
+  });
+  it('tells the agent what the call opener asks and how to act on the answer', () => {
+    const tickets = freshState().tickets;
+    const resolved = buildSystemPrompt(NOW, 'employee', null, null, tickets, { kind: 'resolved', ticket: 'INC0011987', say: 'Your Outlook ticket was resolved on Thursday. Is it working now, or is this about something else?' });
+    expect(resolved).toMatch(/Call opener\n- If Deepak stays quiet after your greeting, you add: "Your Outlook ticket was resolved on Thursday\. Is it working now, or is this about something else\?"/);
+    expect(resolved).toMatch(/That is ticket INC0011987\. If they say it works, call confirmFix with ticket INC0011987 and outcome fixed; if it still fails, outcome not_fixed with their words\./);
+    const outage = buildSystemPrompt(NOW, 'employee', null, null, tickets, { kind: 'outage', incident: 'INC0011950', say: 'IT is still working on the SAP Concur outage.' });
+    expect(outage).toMatch(/That is outage INC0011950\. If it is about that, call checkServiceStatus/);
+    const plain = buildSystemPrompt(NOW, 'employee', null, null, tickets, { kind: 'default', say: 'What can I help you with today?' });
+    expect(plain).toMatch(/you add: "What can I help you with today\?"/);
+    expect(buildSystemPrompt(NOW, 'employee', null, null, tickets)).not.toMatch(/Call opener/);
+    expect(buildSystemPrompt(NOW, 'employee', { number: 'INC0010013', summary: 'VPN down' }, null, tickets, null)).not.toMatch(/Call opener/);
   });
 });
 
@@ -241,7 +233,7 @@ describe('IT desk persona', () => {
     expect(report).toMatch(/Daily, weekly or monthly\?/);
     expect(report).toMatch(/never guess/i);
     expect(report).toMatch(/carry on/i);
-    expect(p).not.toMatch(/Priya Sharma|checkServiceStatus|workday|copilot|okta/i);
+    expect(p).not.toMatch(/Deepak Gowda|checkServiceStatus|workday|copilot|okta/i);
     expect(buildGreeting(freshState(), 'itdesk')).toBe("Hi, I'm your IT Admin voice agent. How can I help?");
     expect(IT_INTRO).toMatch(/ServiceNow/);
     expect(IT_INTRO).not.toMatch(/You can say/);

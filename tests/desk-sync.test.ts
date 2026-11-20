@@ -81,7 +81,7 @@ describe('applyDeskRead', () => {
   });
 });
 
-type FakeDesk = Pick<DeskAdapter, 'mode' | 'get' | 'workNotes' | 'listOpen' | 'activity'>;
+type FakeDesk = Pick<DeskAdapter, 'mode' | 'get' | 'workNotes' | 'listOpen' | 'activity' | 'roster'>;
 function liveDesk(o: Partial<FakeDesk> = {}) {
   const desk: FakeDesk = {
     mode: 'live',
@@ -89,6 +89,7 @@ function liveDesk(o: Partial<FakeDesk> = {}) {
     workNotes: vi.fn(async () => success([])),
     listOpen: vi.fn(async () => success([])),
     activity: vi.fn(async () => success({ opened: [], resolved: [] })),
+    roster: vi.fn(async () => success([])),
     ...o,
   };
   return { desk, make: () => desk as unknown as DeskAdapter };
@@ -120,14 +121,23 @@ describe('syncDesk', () => {
     const idle = await session();
     const { desk, make } = liveDesk();
     expect((await syncDesk(idle.store, idle.code, NOW, make))?.outcome).toBe('idle');
-    const people = await session((await call(freshState(), 'listResources', { team: 'Network', status: '' })).state);
-    expect((await syncDesk(people.store, people.code, NOW, make))?.outcome).toBe('idle');
+    const impact = await session((await call(freshState(), 'showImpact', {})).state);
+    expect((await syncDesk(impact.store, impact.code, NOW, make))?.outcome).toBe('idle');
     const sim = await session(await working());
     const before = (await loadSession(sim.store, sim.code))!.version;
     expect((await syncDesk(sim.store, sim.code, NOW, () => ({ ...desk, mode: 'simulated' }) as unknown as DeskAdapter))?.outcome).toBe('simulated');
     expect((await loadSession(sim.store, sim.code))!.version).toBe(before);
     expect(desk.get).not.toHaveBeenCalled();
     expect(await syncDesk(idle.store, 'ZZZ-ZZZ', NOW, make)).toBeNull();
+  });
+  it('reads the roster again for people on screen, so work picked up in ServiceNow shows', async () => {
+    const people = await session((await call(freshState(), 'listResources', { team: 'Network', status: 'available' })).state);
+    const { desk, make } = liveDesk({ roster: vi.fn(async () => success([{ id: 'u1', name: 'Arjun Rao', teams: ['Network'], open: [{ number: 'INC0010021', summary: 'VPN drops', priority: 2, priorityLabel: '2 - High' }] }, { id: 'u2', name: 'David Dan', teams: ['Network'], open: [] }])) });
+    const out = await syncDesk(people.store, people.code, NOW, make);
+    expect(out?.outcome).toBe('synced');
+    expect(desk.roster).toHaveBeenCalledTimes(1);
+    expect(out?.state.itdesk.board).toMatchObject({ kind: 'people', title: 'Network', status: 'available', available: 1, busy: 1, people: [{ name: 'David Dan', open: [] }] });
+    expect(desk.listOpen).not.toHaveBeenCalled();
   });
   it('reads ServiceNow at most once per 10 seconds per session, shared by every tab', async () => {
     const { store, code, tick, at } = await session(await working());
@@ -204,7 +214,7 @@ describe('/api/itdesk/refresh', () => {
     const v = (value: string, display = value) => ({ value, display_value: display });
     const row = (assignee: string) => ({
       number: v('INC0010101'), sys_id: v(sysId), short_description: v('VPN down for sales'), priority: v('1', '1 - Critical'), state: v('2', 'In Progress'), hold_reason: v(''),
-      assigned_to: assignee ? v('fedcba9876543210fedcba9876543210', assignee) : v(''), assignment_group: v(''), caller_id: v('c1', 'Priya Sharma'), category: v('network'),
+      assigned_to: assignee ? v('fedcba9876543210fedcba9876543210', assignee) : v(''), assignment_group: v(''), caller_id: v('c1', 'Deepak Gowda'), category: v('network'),
       urgency: v('1'), impact: v('1'), opened_at: v('2026-11-18 04:00:00'),
     });
     let assignee = '';
@@ -215,7 +225,7 @@ describe('/api/itdesk/refresh', () => {
       return jsonResponse({ result: [] });
     });
     fetchSpy.mockClear();
-    const current = { number: 'INC0010101', sysId, summary: 'VPN down for sales', priority: 1, priorityLabel: 'Critical', state: '2', stateLabel: 'In Progress', holdReason: null, assignee: null, group: null, caller: 'Priya Sharma', category: 'network', urgency: 1 as const, impact: 1 as const, openedAt: Date.UTC(2026, 10, 18, 4), notes: [] };
+    const current = { number: 'INC0010101', sysId, summary: 'VPN down for sales', priority: 1, priorityLabel: 'Critical', state: '2', stateLabel: 'In Progress', holdReason: null, assignee: null, group: null, caller: 'Deepak Gowda', category: 'network', urgency: 1 as const, impact: 1 as const, openedAt: Date.UTC(2026, 10, 18, 4), notes: [] };
     await updateSession(getStore(), code, (s) => ({ state: { ...s, itdesk: { ...s.itdesk, current } } }));
     assignee = 'Beth Anglin';
     const res = await post({ session: code });

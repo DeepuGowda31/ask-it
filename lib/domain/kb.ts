@@ -1,4 +1,9 @@
+import { EMPLOYEE } from './company';
+
 // Guided fixes for common L1 issues, written for a MacBook on macOS 15. One spoken sentence per step.
+
+// "deepak dot gowda" and "nimbuslabs dot example", as the employee's sign-in is read aloud.
+const [SIGN_IN_USER, SIGN_IN_DOMAIN] = EMPLOYEE.email.split('@').map((part) => part.replace(/\./g, ' dot '));
 
 interface Step {
   text: string;
@@ -66,7 +71,7 @@ export const ARTICLES: Article[] = [
     category: 'inquiry',
     keywords: 'password expired locked lockout locked out sign in login account reset unlock',
     steps: [
-      { text: 'Make sure Caps Lock is off and that you sign in as priya dot sharma.', check: 'Does sign-in work now?' },
+      { text: `Make sure Caps Lock is off and that you sign in as ${SIGN_IN_USER}.`, check: 'Does sign-in work now?' },
       { text: 'I can unlock your account or send a reset link myself once you read me a six-digit code from your work email.', check: 'Shall I send the code now?' },
       { text: 'After the unlock or reset, sign in at login dot nimbuslabs dot example.', check: 'Can you sign in now?' },
       { text: 'If macOS asks for your old keychain password, choose Update Keychain Password and enter the old one.', check: 'Have the password prompts stopped?' },
@@ -394,7 +399,7 @@ export const ARTICLES: Article[] = [
     category: 'software',
     keywords: 'sharepoint site teams files document link denied permission open',
     steps: [
-      { text: 'Open the link in your browser and check that you are signed in as priya dot sharma at nimbuslabs dot example, not a personal account.', check: 'Is it your Nimbus account?' },
+      { text: `Open the link in your browser and check that you are signed in as ${SIGN_IN_USER} at ${SIGN_IN_DOMAIN}, not a personal account.`, check: 'Is it your Nimbus account?' },
       { text: 'Open the link in a private window with Shift Command N and sign in again.', check: 'Does it open there?' },
       { text: 'If it says you need access, click Request access on that page so the site owner gets your request.', check: 'Did you send the request?' },
       { text: 'If nobody approves it, I will raise an access request naming the site and who owns it.', check: 'Shall I raise that request?' },

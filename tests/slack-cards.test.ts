@@ -5,7 +5,7 @@ import { MemoryStore } from '@/lib/server/store';
 import { deliverCard } from '@/lib/server/slack-cards';
 import { fakeFetch, jsonResponse } from './fakes';
 
-const CARD: CardUpdate = { key: 'NMB-7K2:ISS-101', status: 'in_progress', title: 'VPN keeps dropping', person: 'Priya Sharma', device: 'NB-2231', detail: 'Guided fix started', at: 0 };
+const CARD: CardUpdate = { key: 'NMB-7K2:ISS-101', status: 'in_progress', title: 'VPN keeps dropping', person: 'Deepak Gowda', device: 'NB-2231', detail: 'Guided fix started', at: 0 };
 
 function slackFake(handler?: (method: string, body: Record<string, unknown>) => Response | Promise<Response> | undefined) {
   let n = 0;

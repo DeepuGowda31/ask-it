@@ -1,6 +1,7 @@
 import type { KnowledgeSource } from '@/lib/integrations/servicenow-kb';
 import type { DeskAdapter, IdentityAdapter, Mode, StatusSource, TicketAdapter } from '@/lib/integrations/types';
 import { ACTION_TTL_MS, createPending } from '../actions';
+import { EMPLOYEE } from '../company';
 import type { ActionPayload, Alert, Metrics, Persona, SessionState, ToolResult } from '../types';
 
 // Everything a tool may reach outside the session. Built per call; simulated adapters read the snapshot.
@@ -86,7 +87,7 @@ const CONFIRM_NEXT = 'Ask for a clear yes, then call confirmAction with confirma
 export function prepare(state: SessionState, now: number, payload: ActionPayload, summary: string, warnings: string[], lead: string, extraNext = '', data: Record<string, unknown> = {}): Outcome {
   const action = createPending(state, now, payload, summary, warnings);
   const caution = warnings.length ? ` Heads-up: ${warnings.join(' ')}` : '';
-  const next = warnings.length ? `Read the heads-up and only go ahead if Priya insists. ${extraNext}${CONFIRM_NEXT}` : `${extraNext}${CONFIRM_NEXT}`;
+  const next = warnings.length ? `Read the heads-up and only go ahead if ${EMPLOYEE.firstName} insists. ${extraNext}${CONFIRM_NEXT}` : `${extraNext}${CONFIRM_NEXT}`;
   return {
     title: summary,
     actionCode: action.code,

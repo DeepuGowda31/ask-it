@@ -187,10 +187,10 @@ describe('ticket numbers', () => {
 });
 
 describe('seed', () => {
-  it('is Priya at Nimbus Labs with a locked account, two earlier tickets and the Concur outage', () => {
+  it('is Deepak at Nimbus Labs with a locked account, two earlier tickets and the Concur outage', () => {
     const s = freshState();
-    expect(s.employee).toMatchObject({ name: 'Priya Sharma', device: { id: 'NB-2231', model: 'MacBook Pro', os: 'macOS 15' }, vpnClient: 'GlobalProtect' });
-    expect(s.account).toMatchObject({ email: 'priya.sharma@nimbuslabs.example', locked: true, source: 'simulated', factors: ['otp'], factorsKnown: true });
+    expect(s.employee).toMatchObject({ name: 'Deepak Gowda', device: { id: 'NB-2231', model: 'MacBook Pro', os: 'macOS 15' }, vpnClient: 'GlobalProtect' });
+    expect(s.account).toMatchObject({ email: 'deepak.gowda@nimbuslabs.example', locked: true, source: 'simulated', factors: ['otp'], factorsKnown: true });
     expect(s.verification).toEqual({ status: 'none', sentAt: null, approvedAt: null, expiresAt: null, attempts: 0, checking: [], simulatedCode: null });
     expect(s.lastResolution).toBeNull();
     expect(s.tickets.map((t) => [t.number, t.state])).toEqual([

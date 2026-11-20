@@ -187,9 +187,43 @@ export function RightNowCard({ view, now, inCall }: { view: SessionView; now: nu
 
 const MAX_TICKETS = 5;
 
-// The employee's tickets, open first, then closed ones; one line each.
-export function MyTickets({ view }: { view: SessionView }) {
-  const rows = ticketQueue(view.tickets).map((t) => ({ number: t.number, summary: t.summary.replace(/^Resolved by ASK IT: /, ''), status: t.state }));
+type TicketRow = SessionView['tickets'][number];
+const fixedOnCall = (t: TicketRow) => 'fixedOnCall' in t && Boolean(t.fixedOnCall);
+const FixedTag = () => <span className="em-fixed">Fixed on call</span>;
+
+const LIST_TITLE = { open: 'Open tickets', resolved: 'Resolved tickets', all: 'Your tickets' } as const;
+const LIST_ROWS = 3;
+
+// The tickets ASK IT just read out, as a small card in the conversation: title, number and status, a few rows at most.
+export function TicketListCard({ list }: { list: NonNullable<SessionView['ticketList']> }) {
+  const rows = list.tickets.slice(0, LIST_ROWS);
+  const more = list.tickets.length - rows.length;
+  return (
+    <section className="em-tl" aria-label={LIST_TITLE[list.status]}>
+      <p className="em-tl-head">
+        <strong>{LIST_TITLE[list.status]}</strong>
+        <span className="wc-num">{list.tickets.length}</span>
+        {list.period ? <span className="em-tl-period">{list.period}</span> : null}
+      </p>
+      {rows.length ? (
+        <ul>
+          {rows.map((t) => (
+            <li key={t.number} title={t.summary}>
+              <span className="em-tl-title">{t.summary.replace(/^Resolved by ASK IT: /, '')}</span>
+              <span className="em-tl-meta"><span className="wc-mono">{t.number}</span>{fixedOnCall(t) ? <FixedTag /> : null}</span>
+              <span className="wc-chip" data-tone={statusTone(t.state)}>{t.state}</span>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="em-tl-none">None found.</p>}
+      {more > 0 ? <p className="em-tl-more">and {more} more in My tickets</p> : null}
+    </section>
+  );
+}
+
+// The employee's tickets, open first, then closed ones; one line each. Tickets in highlight are the ones ASK IT is talking about.
+export function MyTickets({ view, highlight }: { view: SessionView; highlight?: ReadonlySet<string> }) {
+  const rows = ticketQueue(view.tickets).map((t) => ({ number: t.number, summary: t.summary.replace(/^Resolved by ASK IT: /, ''), status: t.state, fixed: fixedOnCall(t) }));
   return (
     <Card title="My tickets" meta={<ModeBadge mode={view.integrations.tickets} system="ServiceNow" />}>
       {rows.length === 0 ? (
@@ -197,8 +231,8 @@ export function MyTickets({ view }: { view: SessionView }) {
       ) : (
         <ul className="wc-ticket-lines">
           {rows.slice(0, MAX_TICKETS).map((t) => (
-            <li key={t.number} title={t.summary}>
-              <span className="wc-mono">{t.number}</span>
+            <li key={t.number} title={t.summary} data-mentioned={highlight?.has(t.number) || undefined}>
+              <span className="wc-mono">{t.number}{t.fixed ? <FixedTag /> : null}</span>
               <span className="min-w-0 truncate">{t.summary}</span>
               <span className="wc-chip" data-tone={statusTone(t.status)}>{t.status}</span>
             </li>

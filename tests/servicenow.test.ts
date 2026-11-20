@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ServiceNowTickets, serviceNowConfig } from '@/lib/integrations/servicenow';
 import { fakeFetch, hangingFetch, headerOf, jsonResponse } from './fakes';
 
-const CFG = { instanceUrl: 'https://nimbus.service-now.example', user: 'askit.bot', password: 'pa55-SECRET', callerEmail: 'priya.sharma@nimbuslabs.example', closeCode: 'Resolved – Permanent Fix Applied' };
+const CFG = { instanceUrl: 'https://nimbus.service-now.example', user: 'askit.bot', password: 'pa55-SECRET', callerEmail: 'deepak.gowda@nimbuslabs.example', closeCode: 'Resolved – Permanent Fix Applied' };
 const BASIC = `Basic ${Buffer.from('askit.bot:pa55-SECRET').toString('base64')}`;
 const CALLER = { result: [{ sys_id: 'usr-1' }] };
 
@@ -31,12 +31,42 @@ describe('ServiceNow tickets', () => {
     expect(calls.filter((c) => c.url.includes('sys_user'))).toHaveLength(1);
     const [lookup, post] = calls;
     expect(lookup.url.startsWith('https://nimbus.service-now.example/api/now/table/sys_user?')).toBe(true);
-    expect(query(lookup.url)).toMatchObject({ sysparm_query: 'email=priya.sharma@nimbuslabs.example', sysparm_fields: 'sys_id', sysparm_limit: '1' });
+    expect(query(lookup.url)).toMatchObject({ sysparm_query: 'email=deepak.gowda@nimbuslabs.example', sysparm_fields: 'sys_id', sysparm_limit: '1' });
     expect(post.url).toBe('https://nimbus.service-now.example/api/now/table/incident');
     expect(post.init.method).toBe('POST');
     expect(headerOf(post.init, 'authorization')).toBe(BASIC);
     expect(headerOf(post.init, 'content-type')).toBe('application/json');
     expect(post.body).toEqual({ short_description: 'VPN keeps dropping', description: 'Tried 3 steps', urgency: '2', impact: '3', category: 'network', caller_id: 'usr-1', contact_type: 'virtual_agent', correlation_id: 'askit:NMB-7K2:4217' });
+  });
+  it('reads one of the caller\'s own tickets with its owner and the last update the caller can see', async () => {
+    const v = (value: string, display = value) => ({ value, display_value: display });
+    const { sn, calls } = adapter((url) => {
+      if (url.includes('sys_user')) return jsonResponse(CALLER);
+      if (url.includes('sys_journal_field')) return jsonResponse({ result: [{ value: 'Licence approved, assigning the seat today.', sys_created_on: '2026-11-17 06:00:00' }] });
+      return jsonResponse({ result: [{ number: v('INC0010049'), sys_id: v('s49'), short_description: v('Figma licence needed'), state: v('2', 'In Progress'), assigned_to: v('u7', 'Meera Krishnan'), assignment_group: v('g3', 'Software'), sys_updated_on: v('2026-11-17 06:00:00'), close_notes: v('') }] });
+    });
+    expect(await sn.details('INC0010049')).toEqual({
+      ok: true,
+      value: { number: 'INC0010049', sysId: 's49', summary: 'Figma licence needed', state: 'In Progress', urgency: 3, assignee: 'Meera Krishnan', group: 'Software', createdAt: null, updatedAt: Date.UTC(2026, 10, 17, 6), lastComment: { text: 'Licence approved, assigning the seat today.', at: Date.UTC(2026, 10, 17, 6) }, resolution: null },
+    });
+    const incident = calls.find((c) => c.url.includes('/table/incident?'))!;
+    expect(query(incident.url)).toMatchObject({ sysparm_query: 'number=INC0010049^caller_id=usr-1', sysparm_display_value: 'all', sysparm_limit: '1' });
+    const journal = calls.find((c) => c.url.includes('sys_journal_field'))!;
+    // Only comments the caller can see, never work notes.
+    expect(query(journal.url)).toMatchObject({ sysparm_query: 'element_id=s49^element=comments^sys_created_by!=askit.bot^ORDERBYDESCsys_created_on', sysparm_limit: '1' });
+  });
+  it('gives nothing for someone else\'s ticket or a bad number, and keeps the facts when the comments cannot be read', async () => {
+    const none = adapter((url) => (url.includes('sys_user') ? jsonResponse(CALLER) : jsonResponse({ result: [] })));
+    expect(await none.sn.details('INC0010050')).toEqual({ ok: true, value: null });
+    expect(none.calls.some((c) => c.url.includes('sys_journal_field'))).toBe(false);
+    const bad = adapter(() => jsonResponse(CALLER));
+    expect(await bad.sn.details('INC0010050^ORDERBYnumber')).toEqual({ ok: false, error: { kind: 'rejected' } });
+    expect(bad.calls).toHaveLength(0);
+    const v = (value: string, display = value) => ({ value, display_value: display });
+    const quiet = adapter((url) =>
+      url.includes('sys_user') ? jsonResponse(CALLER) : url.includes('sys_journal_field') ? jsonResponse({}, 500) : jsonResponse({ result: [{ number: v('INC0010051'), sys_id: v('s51'), short_description: v('VPN'), state: v('6', 'Resolved'), assigned_to: v(''), assignment_group: v(''), sys_updated_on: v(''), close_notes: v('Replaced the profile') }] }),
+    );
+    expect(await quiet.sn.details('INC0010051')).toMatchObject({ ok: true, value: { assignee: null, group: null, lastComment: null, resolution: 'Replaced the profile', state: 'Resolved' } });
   });
   it('fails when the caller has no ServiceNow user', async () => {
     const { sn, calls } = adapter(() => jsonResponse({ result: [] }));
@@ -57,19 +87,37 @@ describe('ServiceNow tickets', () => {
                 urgency: { display_value: '1 - High', value: '1' },
                 sys_created_on: { display_value: '2026-11-17 22:00:00', value: '2026-11-18 09:00:00' },
                 sys_updated_on: { display_value: '2026-11-17 23:00:00', value: '2026-11-18 10:00:00' },
+                resolved_at: { display_value: '', value: '' },
+              },
+              {
+                number: { display_value: 'INC0010035', value: 'INC0010035' },
+                sys_id: { display_value: 'def', value: 'def' },
+                short_description: { display_value: 'Wi-Fi', value: 'Wi-Fi' },
+                state: { display_value: 'Resolved', value: '6' },
+                urgency: { display_value: '3 - Low', value: '3' },
+                sys_created_on: { display_value: '', value: '2026-11-16 09:00:00' },
+                sys_updated_on: { display_value: '', value: '2026-11-18 10:00:00' },
+                resolved_at: { display_value: '', value: '2026-11-16 12:30:00' },
+                correlation_id: { display_value: 'askit:NMB-7K2:fix4217', value: 'askit:NMB-7K2:fix4217' },
               },
             ],
           }),
     );
     const out = await sn.listMine();
-    expect(out).toEqual({ ok: true, value: [{ number: 'INC0010042', sysId: 'abc', summary: 'VPN', state: 'In Progress', urgency: 1, createdAt: Date.UTC(2026, 10, 18, 9), updatedAt: Date.UTC(2026, 10, 18, 10) }] });
+    expect(out).toEqual({
+      ok: true,
+      value: [
+        { number: 'INC0010042', sysId: 'abc', summary: 'VPN', state: 'In Progress', urgency: 1, createdAt: Date.UTC(2026, 10, 18, 9), updatedAt: Date.UTC(2026, 10, 18, 10) },
+        { number: 'INC0010035', sysId: 'def', summary: 'Wi-Fi', state: 'Resolved', urgency: 3, createdAt: Date.UTC(2026, 10, 16, 9), updatedAt: Date.UTC(2026, 10, 18, 10), resolvedAt: Date.UTC(2026, 10, 16, 12, 30), correlationId: 'askit:NMB-7K2:fix4217' },
+      ],
+    });
     const list = calls[1];
     expect(list.init.method).toBe('GET');
     expect(list.url.startsWith('https://nimbus.service-now.example/api/now/table/incident?')).toBe(true);
     expect(query(list.url)).toEqual({
       sysparm_query: 'caller_id=usr-1^ORDERBYDESCsys_created_on',
       sysparm_limit: '10',
-      sysparm_fields: 'number,short_description,state,urgency,sys_created_on,sys_updated_on,sys_id',
+      sysparm_fields: 'number,short_description,state,urgency,sys_created_on,sys_updated_on,sys_id,resolved_at,correlation_id',
       sysparm_display_value: 'all',
     });
   });
@@ -87,12 +135,10 @@ describe('ServiceNow tickets', () => {
     expect(await sn.addNote({ number: 'INC0099999', sysId: null }, 'x')).toEqual({ ok: false, error: { kind: 'not_found' } });
     expect(calls).toHaveLength(1);
   });
-  it('escalates and resolves with the documented fields', async () => {
+  it('escalates with the documented fields', async () => {
     const { sn, calls } = adapter(() => jsonResponse({ result: {} }));
     await sn.escalate({ number: 'INC0010042', sysId: 'abc' }, 'Blocking a release');
     expect(calls[0].body).toEqual({ urgency: '1', impact: '2', comments: 'Blocking a release' });
-    await sn.resolve({ number: 'INC0010042', sysId: 'abc' }, 'Fixed by restarting GlobalProtect');
-    expect(calls[1].body).toEqual({ state: '6', close_code: 'Resolved – Permanent Fix Applied', close_notes: 'Fixed by restarting GlobalProtect' });
     expect(calls.every((c) => c.init.method === 'PATCH')).toBe(true);
   });
   it.each([
@@ -151,10 +197,41 @@ describe('ServiceNow tickets', () => {
     expect(await sn.reopen({ number: 'INC0010013^ORDERBYnumber', sysId: null }, 'x')).toEqual({ ok: false, error: { kind: 'not_found' } });
     expect(calls).toHaveLength(2);
   });
-  it('resolves with the close code from env', async () => {
-    const f = fakeFetch(() => jsonResponse({ result: {} }));
-    await new ServiceNowTickets({ ...CFG, closeCode: 'Solved' }, { fetch: f.fetch }, new Map()).resolve({ number: 'INC0010042', sysId: 'abc' }, 'x');
-    expect(f.calls[0].body).toMatchObject({ close_code: 'Solved' });
+  it('logs a fix made on the call as one incident created already resolved, in the Service Desk group', async () => {
+    const at = Date.UTC(2026, 10, 18, 4, 5, 6);
+    const { sn, calls } = adapter((url) =>
+      url.includes('sys_user_group') ? jsonResponse({ result: [{ sys_id: 'grp-sd' }] }) : url.includes('sys_user') ? jsonResponse(CALLER) : jsonResponse({ result: { number: 'INC0010050', sys_id: 'fix' } }, 201),
+    );
+    const fix = { ...NEW, shortDescription: 'VPN fixed', correlationId: 'askit:NMB-7K2:fix4217', resolution: { notes: 'Resolved on the call by ASK IT. VPN fixed.', at } };
+    expect(await sn.create(fix)).toEqual({ ok: true, value: { number: 'INC0010050', sysId: 'fix' } });
+    const lookup = calls.find((c) => c.url.includes('sys_user_group'))!;
+    expect(query(lookup.url)).toMatchObject({ sysparm_query: 'name=Service Desk^active=true', sysparm_fields: 'sys_id', sysparm_limit: '1' });
+    const posts = calls.filter((c) => c.init.method === 'POST');
+    expect(posts).toHaveLength(1);
+    expect(posts[0].body).toEqual({
+      short_description: 'VPN fixed', description: 'Tried 3 steps', urgency: '2', impact: '3', category: 'network', caller_id: 'usr-1', contact_type: 'virtual_agent', correlation_id: 'askit:NMB-7K2:fix4217',
+      state: '6', close_code: 'Resolved – Permanent Fix Applied', close_notes: 'Resolved on the call by ASK IT. VPN fixed.', resolved_at: '2026-11-18 04:05:06', assignment_group: 'grp-sd',
+    });
+    await sn.create(fix);
+    expect(calls.filter((c) => c.url.includes('sys_user_group'))).toHaveLength(1);
+    expect(calls.filter((c) => c.init.method !== 'POST' && !c.url.includes('sys_user_group'))).toHaveLength(1);
+  });
+  it('logs the fix without a group when there is no Service Desk group or the lookup fails, and uses the close code from env', async () => {
+    const missing = fakeFetch((url) => (url.includes('sys_user_group') ? jsonResponse({ result: [] }) : url.includes('sys_user') ? jsonResponse(CALLER) : jsonResponse({ result: { number: 'INC0010051', sys_id: 'f2' } }, 201)));
+    const sn = new ServiceNowTickets({ ...CFG, closeCode: 'Solved' }, { fetch: missing.fetch }, new Map());
+    const fix = { ...NEW, resolution: { notes: 'x', at: 0 } };
+    expect(await sn.create(fix)).toMatchObject({ ok: true });
+    const post = missing.calls.find((c) => c.init.method === 'POST')!;
+    expect(post.body).toMatchObject({ state: '6', close_code: 'Solved' });
+    expect(post.body).not.toHaveProperty('assignment_group');
+    const down = fakeFetch((url) => (url.includes('sys_user_group') ? jsonResponse({}, 500) : url.includes('sys_user') ? jsonResponse(CALLER) : jsonResponse({ result: { number: 'INC0010052', sys_id: 'f3' } }, 201)));
+    const flaky = new ServiceNowTickets(CFG, { fetch: down.fetch }, new Map());
+    expect(await flaky.create(fix)).toMatchObject({ ok: true, value: { number: 'INC0010052' } });
+    await flaky.create(fix);
+    // A failed lookup is tried again next time; a missing group is remembered.
+    expect(down.calls.filter((c) => c.url.includes('sys_user_group'))).toHaveLength(2);
+    await sn.create(fix);
+    expect(missing.calls.filter((c) => c.url.includes('sys_user_group'))).toHaveLength(1);
   });
 });
 

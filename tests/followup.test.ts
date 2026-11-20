@@ -7,7 +7,7 @@ import { NOW, freshState } from './helpers';
 
 const remoteOf = (t: TicketRecord, change: Partial<RemoteTicket> = {}): RemoteTicket => ({ number: t.number, sysId: t.sysId!, summary: t.summary, state: t.state, urgency: t.urgency, createdAt: t.createdAt, updatedAt: t.updatedAt, ...change });
 
-// Priya's live tickets: a VPN incident and a monitor request, both open, plus an old resolved one.
+// Deepak's live tickets: a VPN incident and a monitor request, both open, plus an old resolved one.
 function liveState(): SessionState {
   const s = freshState(NOW, { tickets: 'live' });
   s.tickets = [
@@ -40,7 +40,7 @@ describe('follow-up detection', () => {
   });
   it('rings when IT resolves a ticket ASK IT once resolved and the caller reopened', () => {
     const s = liveState();
-    s.tickets[0].summary = 'Resolved by ASK IT: VPN fixed by reinstalling the profile';
+    Object.assign(s.tickets[0], { summary: 'VPN fixed by reinstalling the profile', fixedOnCall: true });
     expect(merged(s, { INC0010013: { state: 'Resolved' } }).followUp).toMatchObject({ number: 'INC0010013', status: 'ringing' });
   });
   it('does not ring for a ticket resolved and reopened between two looks', () => {

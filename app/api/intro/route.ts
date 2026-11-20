@@ -7,7 +7,7 @@ import type { SessionState } from '@/lib/domain/types';
 
 export const dynamic = 'force-dynamic';
 
-// The IT desk intro, sent by the page when the engineer stays quiet after the greeting. Claimed first, so it is said once.
+// The intro, sent by the page when the caller stays quiet after the greeting: the IT desk intro, or the employee call's opener. Claimed first, so it is said once.
 export async function POST(request: NextRequest) {
   let body: unknown;
   try {
@@ -21,23 +21,25 @@ export async function POST(request: NextRequest) {
   if (!isValidSessionCode(code)) return NextResponse.json({ error: 'session is required' }, { status: 400 });
 
   const now = Date.now();
-  type Claim = { state: SessionState; outcome: 'claimed' | 'already' | 'no_call'; agentId: string };
+  type Claim = { state: SessionState; outcome: 'claimed' | 'already' | 'no_call' | 'no_intro'; agentId: string; line: string };
   let claim: Claim;
   try {
     claim = await updateSession(getStore(), code, (s): Claim => {
       const call = s.call;
-      if (!call.active || call.persona !== 'itdesk' || !call.agentId) return { state: s, outcome: 'no_call', agentId: '' };
-      if (call.introAt) return { state: s, outcome: 'already', agentId: '' };
-      return { state: { ...s, call: { ...call, introAt: now } }, outcome: 'claimed', agentId: call.agentId };
+      if (!call.active || !call.agentId) return { state: s, outcome: 'no_call', agentId: '', line: '' };
+      const line = call.persona === 'itdesk' ? IT_INTRO : (call.opener ?? '');
+      if (!line) return { state: s, outcome: 'no_intro', agentId: '', line: '' };
+      if (call.introAt) return { state: s, outcome: 'already', agentId: '', line: '' };
+      return { state: { ...s, call: { ...call, introAt: now } }, outcome: 'claimed', agentId: call.agentId, line };
     });
   } catch (error) {
     if (error instanceof SessionNotFoundError) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     return NextResponse.json({ error: 'Session busy, try again.' }, { status: 503 });
   }
-  if (claim.outcome === 'no_call') return NextResponse.json({ error: 'no_call' }, { status: 409 });
+  if (claim.outcome === 'no_call' || claim.outcome === 'no_intro') return NextResponse.json({ error: claim.outcome }, { status: 409 });
   if (claim.outcome === 'already') return NextResponse.json({ state: 'already' });
   try {
-    await speakWhenIdle(claim.agentId, IT_INTRO);
+    await speakWhenIdle(claim.agentId, claim.line);
     return NextResponse.json({ state: 'sent' });
   } catch {
     return NextResponse.json({ error: 'The intro could not be sent.' }, { status: 502 });

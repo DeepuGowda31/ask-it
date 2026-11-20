@@ -1,9 +1,9 @@
 import type { Mode, RemoteTicket } from '@/lib/integrations/types';
-import { isOpen, mergeRemote } from './tickets';
+import { isAskItFix, isOpen, mergeRemote } from './tickets';
 import { MINUTE } from './time';
 import type { FollowUp, Reminder, SessionState, TicketRecord } from './types';
 
-// Follow-up calls: when IT resolves one of Priya's tickets outside ASK IT, or a reminder she asked for is due, her page rings.
+// Follow-up calls: when IT resolves one of the employee's tickets outside ASK IT, or a reminder they asked for is due, their page rings.
 
 export const SNOOZE_MS = 10 * MINUTE;
 const MAX_QUEUE = 10;
@@ -29,6 +29,9 @@ function dueReminder(state: SessionState, now: number) {
   if (state.call.active) return undefined;
   return state.reminders?.filter((r) => r.status === 'pending' && r.at <= now).sort((a, b) => a.at - b.at)[0];
 }
+
+// A fix ASK IT made with the employee on a call that never went back to IT: nothing to call back about or confirm.
+export const fixedWithCaller = (state: SessionState, t: TicketRecord) => isAskItFix(t) && state.followUp?.number !== t.number && !state.followUpLog?.rung.includes(t.number);
 
 // Drops follow-ups whose ticket is no longer resolved, then rings the next resolution, else the next due reminder, when the line is free.
 function settle(state: SessionState, now: number) {
@@ -61,6 +64,7 @@ function queueResolved(state: SessionState, tickets: TicketRecord[]) {
 }
 
 // Applies a ServiceNow list and queues a follow-up for every ticket that went from open to Resolved since the last look.
+// A fix made on a call is created resolved, so it only rings once it was reopened and IT resolved it again.
 export function mergeTickets(state: SessionState, remote: RemoteTicket[], mode: Mode, now: number) {
   const before = new Map(state.tickets.map((t) => [t.number, t]));
   mergeRemote(state, remote, mode, now);

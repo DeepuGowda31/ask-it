@@ -51,7 +51,7 @@ export interface Finding {
   group: CheckGroup;
   severity: Severity;
   say: string;
-  // Matters for the problem Priya described.
+  // Matters for the problem the employee described.
   relevant: boolean;
   // Guided fix in kb.ts for this finding.
   guide?: string;

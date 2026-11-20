@@ -27,7 +27,7 @@ describe('rightNow', () => {
   it('puts the email code ahead of the guided fix', async () => {
     let s = (await call(freshState(), 'startTroubleshooting', { articleId: 'vpn', issue: '' })).state;
     s = (await call(s, 'verifyIdentity', {}, { code: '421987' })).state;
-    expect(rightNow(view(s), NOW)).toEqual({ kind: 'verify', email: 'priya.sharma@nimbuslabs.example', attemptsLeft: 3, simulatedCode: '421987' });
+    expect(rightNow(view(s), NOW)).toEqual({ kind: 'verify', email: 'deepak.gowda@nimbuslabs.example', attemptsLeft: 3, simulatedCode: '421987' });
   });
 
   it('puts a waiting yes ahead of everything, until it expires', async () => {

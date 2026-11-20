@@ -3,13 +3,15 @@ import type { AccountAction, AccountInfo, DeskIncident, Mode, NewTicket } from '
 import { CLAIM_TTL_MS, findAction, nextId } from '../actions';
 import { issueMilestone, ticketMilestone } from '../cards';
 import { HOLD_WORD } from './itdesk';
-import { deviceLabel } from '../company';
+import { EMPLOYEE, deviceLabel } from '../company';
+import { claimAccountFix, noteAccountAction, placed, recordFix } from '../fixes';
 import { mergeTickets } from '../followup';
-import { addTicket, clip, nextSimNumber, spokenTicket } from '../tickets';
+import { addTicket, clip, fixCorrelationId, spokenTicket } from '../tickets';
 import { outageName } from '../services';
 import type { ActionPayload, Lockdown, LockdownStep, PendingAction, Persona, SessionState } from '../types';
 import { currentUser, identityFailure, lockdownTitle, verificationBlock } from './identity';
 import { alertSay, fail, failed, ok, tool, type Deps, type Outcome } from './shared';
+import { followAssignment } from '../people-board';
 
 type Created = Result<{ number: string; sysId: string }>;
 type AccountStep = Exclude<LockdownStep, 'incident'>;
@@ -26,11 +28,11 @@ type CommitEffect =
   | { kind: 'note'; added: Result<null> }
   // No `added` when the outage was gone or already followed, so nothing was sent.
   | { kind: 'outage'; added?: Result<null> }
-  | { kind: 'resolution'; mode: Mode; created?: Created; resolved?: Result<null> };
+  | { kind: 'resolution'; mode: Mode; created?: Created; at?: number };
 
 const URGENCY_WORD = { 1: 'high', 2: 'medium', 3: 'low' } as const;
-const RETRY_NEXT = 'If Priya says yes, call confirmAction again with the same code.';
-const REMINDER_NEXT = 'If you have not offered a reminder on this call yet, offer one; if she wants it, call scheduleReminder.';
+const RETRY_NEXT = `If ${EMPLOYEE.firstName} says yes, call confirmAction again with the same code.`;
+const REMINDER_NEXT = 'If you have not offered a reminder on this call yet, offer one; if they want it, call scheduleReminder.';
 
 function blocker(state: SessionState, action: PendingAction, now: number) {
   if (now > action.expiresAt) return { error: 'action_expired', say: 'That confirmation expired after 5 minutes, so nothing was done. Shall I prepare it again?' };
@@ -97,20 +99,25 @@ async function lockdownEffect(state: SessionState, action: PendingAction, p: Loc
   return { kind: 'lockdown', mode: deps.tickets.mode, notifyMode: deps.notifyMode, account, created: await deps.tickets.create(ticket) };
 }
 
-// Logs the fix as a resolved incident, unless the same fix was logged meanwhile.
-async function resolutionEffect(state: SessionState, action: PendingAction, p: ResolutionPayload, deps: Deps): Promise<CommitEffect> {
+// Logs the fix as one incident created already resolved, unless the same fix was logged meanwhile.
+async function resolutionEffect(state: SessionState, action: PendingAction, p: ResolutionPayload, deps: Deps, now: number): Promise<CommitEffect> {
   const mode = deps.tickets.mode;
   if (state.lastResolution?.key === p.key) return { kind: 'resolution', mode };
-  const created = await deps.tickets.create({ ...p.ticket, correlationId: correlationId(state, action) });
-  if (!created.ok) return { kind: 'resolution', mode, created };
-  const resolved = await deps.tickets.resolve({ ...created.value }, `Resolved with the employee by the ASK IT voice helpdesk: ${p.summary}`);
-  return { kind: 'resolution', mode, created, resolved };
+  const created = await deps.tickets.create(resolutionTicket(state, action, p, now));
+  return { kind: 'resolution', mode, created, at: now };
 }
 
-async function commitEffect(state: SessionState, action: PendingAction, deps: Deps): Promise<CommitEffect> {
+// Resolved when it is committed.
+const resolutionTicket = (state: SessionState, action: PendingAction, p: ResolutionPayload, at: number): NewTicket => ({
+  ...p.ticket,
+  correlationId: fixCorrelationId(state.id, action.code),
+  resolution: { notes: p.ticket.resolution?.notes ?? `Resolved on the call by ASK IT. ${p.summary}`, at },
+});
+
+async function commitEffect(state: SessionState, action: PendingAction, deps: Deps, now: number): Promise<CommitEffect> {
   const payload = action.payload;
   if (payload.kind === 'lockdown') return lockdownEffect(state, action, payload, deps);
-  if (payload.kind === 'resolution') return resolutionEffect(state, action, payload, deps);
+  if (payload.kind === 'resolution') return resolutionEffect(state, action, payload, deps, now);
   if (payload.kind === 'note') return { kind: 'note', added: await deps.tickets.addNote({ number: payload.number, sysId: payload.sysId }, payload.text) };
   if (payload.kind === 'outage') {
     const outage = state.outages.find((o) => o.incident === payload.incident);
@@ -140,13 +147,6 @@ async function commitEffect(state: SessionState, action: PendingAction, deps: De
 function retryLater(action: PendingAction) {
   release(action);
   action.tries = (action.tries ?? 0) + 1;
-}
-
-// Two simulated creates from the same snapshot pick the same number; the later one moves up.
-function placed(state: SessionState, mode: Mode, created: { number: string; sysId: string }) {
-  if (mode !== 'simulated' || !state.tickets.some((x) => x.number === created.number)) return created;
-  const number = nextSimNumber(state);
-  return { number, sysId: `sim-${number}` };
 }
 
 function commitTicket(state: SessionState, action: PendingAction, t: Omit<NewTicket, 'correlationId'>, effect: Extract<CommitEffect, { kind: 'ticket' }>, now: number): Outcome {
@@ -236,7 +236,8 @@ function commitIncident(state: SessionState, action: PendingAction, p: Extract<A
   if (desk.current?.number === fresh.number) desk.current = { ...fresh, notes: [...note, ...desk.current.notes] };
   if (effect.mode === 'simulated') desk.backlog = desk.backlog.map((i) => (i.number === fresh.number ? { ...fresh, notes: [...note, ...i.notes] } : i));
   desk.lastUpdate = { number: fresh.number, changes: p.changes, at: now };
-  // Her own ticket changed on the IT desk: the mirror follows, and a resolution rings her page.
+  if (desk.board) desk.board = followAssignment(desk.board, fresh);
+  // The employee's own ticket changed on the IT desk: the mirror follows, and a resolution rings their page.
   if (state.tickets.some((t) => t.number === fresh.number)) {
     mergeTickets(state, [{ number: fresh.number, sysId: fresh.sysId, summary: fresh.summary, state: fresh.stateLabel, urgency: fresh.urgency, createdAt: null, updatedAt: null }], effect.mode, now);
   }
@@ -254,7 +255,7 @@ function commitIncident(state: SessionState, action: PendingAction, p: Extract<A
 }
 
 const ACCOUNT_CARD = { unlock: 'Account unlocked', resetPassword: 'Password reset link sent', resetMfa: 'MFA reset' };
-const SIGN_IN_NEXT = 'Ask whether Priya can sign in now. If yes, call markResolved; if not, keep troubleshooting.';
+const SIGN_IN_NEXT = `Ask whether ${EMPLOYEE.firstName} can sign in now. If yes, call markResolved; if not, keep troubleshooting.`;
 
 const ACCOUNT_DONE = {
   unlock: () => 'Your account is unlocked. Try signing in now, and tell me if it works.',
@@ -275,6 +276,8 @@ function commitAccount(state: SessionState, action: PendingAction, kind: Account
   }
   if (kind === 'unlock') state.account.locked = false;
   if (kind === 'resetMfa') state.account.factors = [];
+  // Logged as a resolved incident by markResolved, else at wrap up or when the call ends.
+  noteAccountAction(state, kind, now);
   const alert = issueMilestone(state, now, 'waiting_employee', `${ACCOUNT_CARD[kind]}; waiting for the employee to sign in`, { title: 'Account access' });
   return { title: `Done: ${action.summary}`, minutesSaved: 15, metrics: { accountActions: 1 }, alerts: [alert], result: ok(ACCOUNT_DONE[kind](), { action: kind }, SIGN_IN_NEXT) };
 }
@@ -385,47 +388,33 @@ function commitOutage(state: SessionState, action: PendingAction, incident: stri
   return { title: `Following ${incident} · duplicate ticket avoided`, minutesSaved: 10, metrics: { duplicatesAvoided: 1 }, alerts: [alert], result: ok(say, { incident, affected: outage.affected }) };
 }
 
-function resolvedSay(spoken: string, created: Result<unknown>, resolved: Result<null> | undefined): string {
-  if (unknownOutcome(created)) return "Glad it's fixed. I'm not sure ServiceNow logged it, because it did not answer in time, so I've kept a local record too.";
-  if (!created.ok) return `Glad it's fixed. I couldn't log it in ServiceNow: ${describeFailure('ServiceNow', created.error)} I've kept a local record instead.`;
-  if (resolved && !resolved.ok) return `Glad it's fixed. I logged it as ${spoken}, but couldn't close it in ServiceNow: ${describeFailure('ServiceNow', resolved.error)}`;
-  return `Logged as resolved by ASK IT, ${spoken}, so it counts as fixed without an IT ticket. Anything else I can help with?`;
-}
-
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const UNSYNCED_NEXT = 'ServiceNow did not take the record yet. It is kept on this session and retried once at wrap up. Mention it only if they ask.';
 
-// A ServiceNow failure still counts as fixed on the call; the local record says it did not sync.
-function commitResolution(state: SessionState, p: ResolutionPayload, effect: Extract<CommitEffect, { kind: 'resolution' }>, now: number): Outcome {
+// A ServiceNow failure still counts as fixed on the call and is not brought up; the local record says it did not sync.
+function commitResolution(state: SessionState, action: PendingAction, p: ResolutionPayload, effect: Extract<CommitEffect, { kind: 'resolution' }>, now: number): Outcome {
   const last = state.lastResolution;
-  const { mode, created, resolved } = effect;
-  if (!created || last?.key === p.key) return { title: 'Already logged as resolved', result: ok("That's already logged as resolved, nothing changed.", { alreadyResolved: true, number: last?.number }) };
-  const number = created.ok ? placed(state, mode, created.value).number : nextId(state, 'LOCAL');
-  const closed = created.ok && resolved?.ok;
-  addTicket(state, {
-    number,
-    sysId: created.ok ? created.value.sysId : null,
-    summary: p.ticket.shortDescription,
-    state: created.ok && !closed ? 'New' : 'Resolved',
-    urgency: 3,
-    source: mode,
-    createdAt: now,
-    updatedAt: now,
-    raisedHere: true,
-    ...(closed ? {} : { syncFailed: true }),
-  });
+  const { mode, created } = effect;
+  const account = p.account !== undefined && state.accountFix?.at === p.account && state.accountFix.claim === action.claim ? state.accountFix : null;
+  if (!created || last?.key === p.key) {
+    if (account?.status === 'logging') state.accountFix = { actions: account.actions, at: account.at, status: 'open' };
+    return { title: 'Already logged as resolved', result: ok("That's already logged as resolved, nothing changed.", { alreadyResolved: true, number: last?.number }) };
+  }
+  const number = recordFix(state, now, mode, p.key, resolutionTicket(state, action, p, effect.at ?? now), created);
   const t = state.troubleshooting;
   if (t && t.status !== 'ticketed') {
     t.status = 'resolved';
     t.ticket = number;
   }
-  state.lastResolution = { key: p.key, status: 'done', number };
+  if (account) state.accountFix = { actions: account.actions, at: account.at, status: 'logged', number };
   const alert = issueMilestone(state, now, 'resolved_by_askit', p.summary, { title: p.summary, ticket: number });
+  const say = created.ok ? `Logged as resolved by ASK IT, ${spokenTicket(number)}, so it counts as fixed without an IT ticket. Anything else I can help with?` : "Glad it's fixed. Anything else I can help with?";
   return {
     title: `Resolved by ASK IT · ${capital(p.summary)}`,
     minutesSaved: 20,
     metrics: { resolvedByAgent: 1 },
     alerts: [alert],
-    result: ok(resolvedSay(spokenTicket(number), created, resolved), { number, synced: Boolean(closed) }, REMINDER_NEXT),
+    result: ok(say, { number, synced: created.ok }, created.ok ? REMINDER_NEXT : `${UNSYNCED_NEXT} ${REMINDER_NEXT}`),
   };
 }
 
@@ -446,7 +435,7 @@ function commit(state: SessionState, action: PendingAction, effect: CommitEffect
   if (effect.kind === 'lockdown' && p.kind === 'lockdown') return commitLockdown(state, p, effect, now);
   if (effect.kind === 'note' && p.kind === 'note') return commitNote(state, action, p, effect, now);
   if (effect.kind === 'outage' && p.kind === 'outage') return commitOutage(state, action, p.incident, effect, now);
-  if (effect.kind === 'resolution' && p.kind === 'resolution') return commitResolution(state, p, effect, now);
+  if (effect.kind === 'resolution' && p.kind === 'resolution') return commitResolution(state, action, p, effect, now);
   release(action);
   return retry();
 }
@@ -468,12 +457,15 @@ const confirmAction = tool<CommitEffect>({
   begin(state, args, now, claim, persona) {
     const action = ownAction(state, args.code, persona);
     if (!action || !claimable(action, now) || blocker(state, action, now)) return false;
+    // A resolution owns the account fix it covers, so the end of the call cannot log it too.
+    const p = action.payload;
+    if (p.kind === 'resolution' && p.account !== undefined && !claimAccountFix(state, p.account, claim, now)) return false;
     Object.assign(action, { status: 'committing', claim, claimedAt: now });
     return true;
   },
-  async effect({ state, deps, claim }, args) {
+  async effect({ state, now, deps, claim }, args) {
     const action = findAction(state, args.code);
-    return action?.status === 'committing' && action.claim === claim ? commitEffect(state, action, deps) : undefined;
+    return action?.status === 'committing' && action.claim === claim ? commitEffect(state, action, deps, now) : undefined;
   },
   run({ state, now, effect, claim, persona }, args) {
     const action = ownAction(state, args.code, persona);

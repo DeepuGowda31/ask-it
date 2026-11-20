@@ -1,6 +1,6 @@
 import { failure, requestJson, success, type Http, type Result } from './http';
 import { assetMarker, findAsset } from '@/lib/domain/assets';
-import type { Level, NewTicket, OpenTicket, RemoteTicket, TicketAdapter, TicketRef } from './types';
+import type { Level, NewTicket, OpenTicket, RemoteTicket, TicketAdapter, TicketDetails, TicketRef } from './types';
 
 type Env = Record<string, string | undefined>;
 
@@ -20,12 +20,17 @@ interface Timeouts {
 const TIMEOUTS: Timeouts = { call: 4000, create: 5500 };
 // Valid resolution code on current releases (note the en dash); override with SERVICENOW_CLOSE_CODE.
 const CLOSE_CODE = 'Resolved – Permanent Fix Applied';
-const LIST_FIELDS = 'number,short_description,state,urgency,sys_created_on,sys_updated_on,sys_id';
+const LIST_FIELDS = 'number,short_description,state,urgency,sys_created_on,sys_updated_on,sys_id,resolved_at,correlation_id';
 const TICKET_NUMBER = /^INC\d{7}$/;
 const CORRELATION_ID = /^askit:[A-Za-z0-9-]+:[A-Za-z0-9]+$/;
 
-// Caller sys_ids survive across requests in the same process.
+// Caller and group sys_ids survive across requests in the same process.
 const CALLERS = new Map<string, string>();
+// Fixes made on the call go to this group when the instance has it.
+const FIX_GROUP = 'Service Desk';
+
+// "2026-11-18 04:05:06", the UTC form ServiceNow stores.
+const serviceNowTime = (ms: number) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
 
 export function serviceNowConfig(env: Env): ServiceNowConfig | null {
   const instanceUrl = env.SERVICENOW_INSTANCE_URL?.trim().replace(/\/+$/, '');
@@ -77,6 +82,8 @@ function toRemote(row: unknown): RemoteTicket | null {
   const number = field(row, 'number', 'value');
   const sysId = field(row, 'sys_id', 'value');
   if (typeof number !== 'string' || typeof sysId !== 'string') return null;
+  const resolvedAt = parseTime(field(row, 'resolved_at', 'value'));
+  const correlationId = field(row, 'correlation_id', 'value');
   return {
     number,
     sysId,
@@ -85,6 +92,8 @@ function toRemote(row: unknown): RemoteTicket | null {
     urgency: parseLevel(field(row, 'urgency', 'value')),
     createdAt: parseTime(field(row, 'sys_created_on', 'value')),
     updatedAt: parseTime(field(row, 'sys_updated_on', 'value')),
+    ...(resolvedAt === null ? {} : { resolvedAt }),
+    ...(typeof correlationId === 'string' && correlationId ? { correlationId } : {}),
   };
 }
 
@@ -132,6 +141,20 @@ export class ServiceNowTickets implements TicketAdapter {
     return success(id);
   }
 
+  // The fix group's sys_id, '' when the instance has none; a failed lookup is not remembered and never blocks the create.
+  private async fixGroupId(): Promise<string> {
+    const key = `${this.cfg.instanceUrl}|group|${FIX_GROUP}`;
+    const cached = this.callers.get(key);
+    if (cached !== undefined) return cached;
+    const params = new URLSearchParams({ sysparm_query: `name=${FIX_GROUP}^active=true`, sysparm_fields: 'sys_id', sysparm_limit: '1' });
+    const res = await this.call('GET', `/api/now/table/sys_user_group?${params}`);
+    const rows = res.ok ? resultOf(res.value) : undefined;
+    if (!Array.isArray(rows)) return '';
+    const id = isRecord(rows[0]) && typeof rows[0].sys_id === 'string' ? rows[0].sys_id : '';
+    this.callers.set(key, id);
+    return id;
+  }
+
   // `checked` asks for the saved state back: an ACL on the field drops a change without an error.
   private async patch(ref: TicketRef, fields: Record<string, string>, checked = false): Promise<Result<null>> {
     // Simulated ids never go to the live API; look the number up instead.
@@ -158,8 +181,11 @@ export class ServiceNowTickets implements TicketAdapter {
   }
 
   async create(t: NewTicket): Promise<Result<{ number: string; sysId: string }>> {
-    const caller = await this.callerId();
+    const [caller, group] = await Promise.all([this.callerId(), t.resolution ? this.fixGroupId() : '']);
     if (!caller.ok) return caller;
+    const fix = t.resolution
+      ? { state: '6', close_code: this.cfg.closeCode, close_notes: t.resolution.notes, resolved_at: serviceNowTime(t.resolution.at), ...(group ? { assignment_group: group } : {}) }
+      : {};
     const body = {
       short_description: t.shortDescription,
       description: t.description,
@@ -169,6 +195,7 @@ export class ServiceNowTickets implements TicketAdapter {
       caller_id: caller.value,
       contact_type: 'virtual_agent',
       correlation_id: t.correlationId,
+      ...fix,
     };
     const res = await this.call('POST', '/api/now/table/incident', body, this.timeouts.create);
     if (!res.ok) {
@@ -199,6 +226,40 @@ export class ServiceNowTickets implements TicketAdapter {
     return tickets.every((t): t is RemoteTicket => t !== null) ? success(tickets) : badResponse();
   }
 
+  async details(number: string): Promise<Result<TicketDetails | null>> {
+    if (!TICKET_NUMBER.test(number)) return failure({ kind: 'rejected' });
+    const caller = await this.callerId();
+    if (!caller.ok) return caller;
+    const params = new URLSearchParams({
+      sysparm_query: `number=${number}^caller_id=${caller.value}`,
+      sysparm_fields: `${LIST_FIELDS},assigned_to,assignment_group,close_notes`,
+      sysparm_display_value: 'all',
+      sysparm_limit: '1',
+    });
+    const res = await this.call('GET', `/api/now/table/incident?${params}`);
+    if (!res.ok) return res;
+    const rows = resultOf(res.value);
+    if (!Array.isArray(rows)) return badResponse();
+    if (!rows.length) return success(null);
+    const row = rows[0];
+    const ticket = toRemote(row);
+    if (!ticket || !isRecord(row)) return badResponse();
+    const text = (name: string) => String(field(row, name, 'display_value') ?? '').trim() || null;
+    return success({ ...ticket, assignee: text('assigned_to'), group: text('assignment_group'), lastComment: await this.lastComment(ticket.sysId), resolution: text('close_notes') });
+  }
+
+  // The newest comment on an incident; a failed read leaves it out.
+  private async lastComment(sysId: string): Promise<TicketDetails['lastComment']> {
+    if (!/^[A-Za-z0-9]+$/.test(sysId)) return null;
+    // Comments ASK IT added for the caller are their own words, not an update from IT.
+    const notMine = /^[\w.@-]+$/.test(this.cfg.user) ? `^sys_created_by!=${this.cfg.user}` : '';
+    const params = new URLSearchParams({ sysparm_query: `element_id=${sysId}^element=comments${notMine}^ORDERBYDESCsys_created_on`, sysparm_fields: 'value,sys_created_on', sysparm_limit: '1' });
+    const res = await this.call('GET', `/api/now/table/sys_journal_field?${params}`);
+    const rows = res.ok ? resultOf(res.value) : undefined;
+    const r = Array.isArray(rows) && isRecord(rows[0]) ? rows[0] : null;
+    return r && typeof r.value === 'string' && r.value.trim() ? { text: r.value.trim(), at: parseTime(r.sys_created_on) } : null;
+  }
+
   // Only catalog ids reach the query, so it cannot carry an operator.
   async findOpenForAsset(assetId: string): Promise<Result<OpenTicket | null>> {
     if (!findAsset(assetId)) return failure({ kind: 'rejected' });
@@ -215,10 +276,6 @@ export class ServiceNowTickets implements TicketAdapter {
     if (!isRecord(r)) return success(null);
     if (typeof r.number !== 'string' || typeof r.sys_id !== 'string') return badResponse();
     return success({ number: r.number, sysId: r.sys_id, summary: String(r.short_description ?? '') });
-  }
-
-  resolve(ref: TicketRef, notes: string) {
-    return this.patch(ref, { state: '6', close_code: this.cfg.closeCode, close_notes: notes });
   }
 
   addNote(ref: TicketRef, text: string) {

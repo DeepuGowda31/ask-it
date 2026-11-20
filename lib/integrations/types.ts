@@ -11,6 +11,8 @@ export interface NewTicket {
   category: string;
   // Lets a lost create be found again and stops a retry from duplicating it.
   correlationId: string;
+  // A fix made on the call: the incident is created already resolved with these close notes.
+  resolution?: { notes: string; at: number };
 }
 
 export interface TicketRef {
@@ -26,6 +28,18 @@ export interface RemoteTicket {
   urgency: Level;
   createdAt: number | null;
   updatedAt: number | null;
+  // Only when ServiceNow has it.
+  resolvedAt?: number;
+  correlationId?: string;
+}
+
+// One of the caller's tickets with who has it and the last update the caller can see.
+export interface TicketDetails extends RemoteTicket {
+  assignee: string | null;
+  group: string | null;
+  // The newest comment, which the caller sees; work notes stay internal.
+  lastComment: { text: string; at: number | null } | null;
+  resolution: string | null;
 }
 
 // An open incident someone already raised for a device.
@@ -39,8 +53,9 @@ export interface TicketAdapter {
   mode: Mode;
   create(ticket: NewTicket): Promise<Result<{ number: string; sysId: string }>>;
   find(correlationId: string): Promise<Result<{ number: string; sysId: string } | null>>;
-  resolve(ref: TicketRef, notes: string): Promise<Result<null>>;
   listMine(): Promise<Result<RemoteTicket[]>>;
+  // One ticket by number, only when the caller raised it; null for anyone else's.
+  details(number: string): Promise<Result<TicketDetails | null>>;
   // The newest open incident raised for a catalog device, by anyone.
   findOpenForAsset(assetId: string): Promise<Result<OpenTicket | null>>;
   addNote(ref: TicketRef, text: string): Promise<Result<null>>;

@@ -6,8 +6,9 @@ import { CallPanel, LiveIncident, ReportCard } from './ItDesk';
 import { Results } from './Results';
 import { CallMount } from './VoiceCall';
 import type { SessionView } from '@/lib/domain/view';
-import { alertProblem, formatCountdown, introDue } from '@/lib/client/helpers';
+import { alertProblem, formatCountdown } from '@/lib/client/helpers';
 import { ticketCatalog } from '@/lib/client/right-now';
+import { useCallIntro } from '@/lib/client/useCallIntro';
 import { pickSessionCode } from '@/lib/client/session-code';
 import { useDeskRefresh } from '@/lib/client/useDeskRefresh';
 import { useReport } from '@/lib/client/useReport';
@@ -69,14 +70,7 @@ export default function ItDashboard({ initialCode }: { initialCode: string }) {
   // A report the agent recorded is built by the server and downloads here by itself.
   const report = useReport(code, view?.itdesk.report ?? null);
   // A few quiet seconds after the greeting bring the short intro; the server says it at most once per call.
-  const introReady = call.phase === 'live' && introDue(call.transcript, call.signalState);
-  useEffect(() => {
-    if (!introReady || !code) return;
-    const timer = setTimeout(() => {
-      fetch('/api/intro', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ session: code }) }).catch(() => {});
-    }, INTRO_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, [introReady, code]);
+  useCallIntro(call, code, INTRO_DELAY_MS);
 
   // The link's session, else this browser's last one, else a fresh one: the dashboard never asks for a code.
   const adopt = useCallback((c: string) => {

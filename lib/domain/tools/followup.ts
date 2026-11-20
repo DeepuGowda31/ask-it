@@ -2,7 +2,8 @@ import { describeFailure, type Result } from '@/lib/integrations/http';
 import type { Mode } from '@/lib/integrations/types';
 import { CLAIM_TTL_MS, nextId } from '../actions';
 import { ticketMilestone } from '../cards';
-import { isResolved } from '../followup';
+import { EMPLOYEE } from '../company';
+import { fixedWithCaller, isResolved } from '../followup';
 import { MAX_AHEAD_MS, MAX_PENDING_REMINDERS, parseWhen, reminderLabel, spokenWhen } from '../reminders';
 import { clip, echo, findTicket, spokenTicket } from '../tickets';
 import { DAY } from '../time';
@@ -42,12 +43,12 @@ function notResolved(state: SessionState, t: TicketRecord, outcome: FixOutcome):
   if (/closed|cancel/i.test(t.state)) {
     settleFollowUp(state, t.number);
     if (outcome === 'fixed') return { title: `${t.number} already closed`, result: ok(`Glad it works. ${spoken} is already closed, so there's nothing more to do.`, { number: t.number, alreadyClosed: true }) };
-    return failed(`Reopen: ${t.number} already closed`, 'ticket_closed', `${spoken} is already closed in ServiceNow, so I can't reopen it. I can raise a new ticket with what's still wrong. Shall I?`, ['prepareTicket'], 'If she agrees, call prepareTicket.');
+    return failed(`Reopen: ${t.number} already closed`, 'ticket_closed', `${spoken} is already closed in ServiceNow, so I can't reopen it. I can raise a new ticket with what's still wrong. Shall I?`, ['prepareTicket'], 'If they agree, call prepareTicket.');
   }
-  return failed(`Confirm fix: ${t.number} not resolved`, 'ticket_open', `${spoken} isn't marked resolved, it's ${t.state.toLowerCase()}, so IT is still working on it. I can add what you said as a note.`, ['addTicketNote'], 'If she wants, call addTicketNote with her words.');
+  return failed(`Confirm fix: ${t.number} not resolved`, 'ticket_open', `${spoken} isn't marked resolved, it's ${t.state.toLowerCase()}, so IT is still working on it. I can add what you said as a note.`, ['addTicketNote'], 'If they want, call addTicketNote with their words.');
 }
 
-const RETRY_NEXT = 'If Priya wants, call confirmFix again with the same answer; retrying is safe.';
+const RETRY_NEXT = `If ${EMPLOYEE.firstName} wants, call confirmFix again with the same answer; retrying is safe.`;
 
 function commitFailed(t: TicketRecord, outcome: FixOutcome, result: Result<null>): Outcome {
   const error = result.ok ? { kind: 'bad_response' as const } : result.error;
@@ -72,16 +73,16 @@ interface FixEffect {
 const confirmFix = tool<FixEffect>({
   name: 'confirmFix',
   description:
-    "Record Priya's answer on a follow-up call about a ticket IT resolved: fixed closes it in ServiceNow, not_fixed reopens it at high urgency with her words and alerts IT. Her spoken answer to the follow-up question is the approval: call it straight away, never ask for another yes. Safe to repeat.",
+    `Record ${EMPLOYEE.firstName}'s answer about a ticket IT resolved, on a follow-up call or after the call opener asked whether it works: fixed closes it in ServiceNow, not_fixed reopens it at high urgency with their words and alerts IT. Their spoken answer is the approval: call it straight away, never ask for another yes. Not for tickets ASK IT resolved on a call. Safe to repeat.`,
   params: {
     ticket: { description: 'Ticket number as said, or empty string for the ticket this call is about', allowEmpty: true },
     outcome: { description: 'fixed if it works now, not_fixed if it still fails', enum: ['fixed', 'not_fixed'] },
-    note: { description: 'What Priya said, in her words, or empty string', allowEmpty: true },
+    note: { description: `What ${EMPLOYEE.firstName} said, in their words, or empty string`, allowEmpty: true },
   },
   minutesSaved: 5,
   begin(state, args, now, claim) {
     const t = target(state, args.ticket);
-    if (!t?.sysId || !isResolved(t)) return false;
+    if (!t?.sysId || !isResolved(t) || fixedWithCaller(state, t)) return false;
     const check = checkOf(state, t.number);
     if (check?.status === 'committing' && now - (check.claimedAt ?? 0) <= CLAIM_TTL_MS) return false;
     saveCheck(state, { number: t.number, outcome: args.outcome as FixOutcome, status: 'committing', claim, claimedAt: now, at: now }, t.number);
@@ -101,6 +102,7 @@ const confirmFix = tool<FixEffect>({
     const t = target(state, args.ticket);
     if (!t) return failed('Confirm fix: unknown ticket', 'unknown_ticket', args.ticket ? `I can't find ticket ${echo(args.ticket)} among your tickets.` : 'Which ticket is this about? Tell me its number.');
     if (!t.sysId) return failed(`Confirm fix: ${t.number} is local only`, 'not_synced', "That ticket only exists as a local copy, so there's nothing in ServiceNow to close or reopen.");
+    if (fixedWithCaller(state, t)) return failed(`Confirm fix: ${t.number} was fixed on a call`, 'askit_fix', 'That one was fixed with you on a call, so there is nothing to confirm.');
     const check = checkOf(state, t.number);
     if (check?.status === 'committing' && check.claim !== claim) return failed(`Confirm fix: ${t.number} in progress`, 'in_progress', "I'm saving that right now. Give it a moment.");
     if (check?.status === 'done' && check.outcome === outcome && !isResolved(t)) {
@@ -142,9 +144,9 @@ const REMINDER_SET_NEXT = 'Do not offer another reminder on this call. Ask if th
 const scheduleReminder = tool({
   name: 'scheduleReminder',
   description:
-    "Set a reminder: at that time ASK IT rings Priya's page to check back, for example after a ticket is raised or a fix is done. Not a critical action, so no confirmation code: read the time back instead. India time, up to 7 days ahead, at most 5 waiting.",
+    `Set a reminder: at that time ASK IT rings ${EMPLOYEE.firstName}'s page to check back, for example after a ticket is raised or a fix is done. Not a critical action, so no confirmation code: read the time back instead. India time, up to 7 days ahead, at most 5 waiting.`,
   params: {
-    when: { description: 'When, in her words: "in 2 minutes", "in 3 hours", "tomorrow at 10 am", "at 5 pm", "this evening" or "tomorrow morning"' },
+    when: { description: 'When, in their words: "in 2 minutes", "in 3 hours", "tomorrow at 10 am", "at 5 pm", "this evening" or "tomorrow morning"' },
     about: { description: 'What to check on, in a few words, or empty string for the ticket or current issue', allowEmpty: true },
     ticket: { description: 'Ticket number as said, or empty string for none', allowEmpty: true },
   },

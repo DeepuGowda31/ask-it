@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { displayTicketNumbers, statusTone, ticketList } from '@/lib/client/ticket-lines';
+import { displayTicketNumbers, listTurnId, mentionedTickets, statusTone, ticketList } from '@/lib/client/ticket-lines';
 import { spokenTicket } from '@/lib/domain/tickets';
 
 const CATALOG = new Map([
@@ -99,5 +99,31 @@ describe('statusTone', () => {
     [null, undefined],
   ] as const)('%s', (status, tone) => {
     expect(statusTone(status)).toBe(tone);
+  });
+});
+
+describe('mentionedTickets', () => {
+  it('collects written and spoken numbers once each', () => {
+    expect([...mentionedTickets('INC0010013 and I-N-C one zero zero one two, then INC0010013 again.')]).toEqual(['INC0010013', 'INC0010012']);
+  });
+  it('is empty without a ticket', () => {
+    expect(mentionedTickets('Your Wi-Fi is fixed.').size).toBe(0);
+  });
+});
+
+describe('listTurnId', () => {
+  const turns = [
+    { id: 'a1', role: 'agent' as const, createdAt: 1000 },
+    { id: 'u1', role: 'user' as const, createdAt: 2000 },
+    { id: 'a2', role: 'agent' as const, createdAt: 3000 },
+  ];
+  it('picks the first agent turn after the list was made', () => {
+    expect(listTurnId(turns, 2500)).toBe('a2');
+  });
+  it('ignores a list from an earlier call', () => {
+    expect(listTurnId(turns, 500)).toBeNull();
+  });
+  it('waits until ASK IT speaks', () => {
+    expect(listTurnId(turns, 3500)).toBeNull();
   });
 });

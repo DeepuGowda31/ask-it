@@ -1,25 +1,31 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Figtree } from 'next/font/google';
 import { Download, MapPin, Mic, RotateCcw } from 'lucide-react';
 import { Brand } from './Brand';
 import { Drawer } from './Drawer';
 import { DocumentView } from './DocumentView';
 import { Transcript } from './Transcript';
-import { AccountCard, DocumentList, MyTickets, RightNowCard, urgencyLabel } from './SideCards';
-import { CallBanners, CallDock, CallMount, CallSignal } from './VoiceCall';
+import { AccountCard, DocumentList, MyTickets, RightNowCard, TicketListCard, urgencyLabel } from './SideCards';
+import { CallMount, CallSignal } from './VoiceCall';
+import { CallStage } from './CallStage';
 import { Faq } from './Faq';
 import { IncomingCall } from './IncomingCall';
-import { formatCountdown } from '@/lib/client/helpers';
 import { useFollowUp } from '@/lib/client/useFollowUp';
 import { useNow, useSessionState } from '@/lib/client/useSessionState';
 import { useVoiceCall } from '@/lib/client/useVoiceCall';
+import { useCallIntro } from '@/lib/client/useCallIntro';
 import { useDiagnostics } from '@/lib/client/useDiagnostics';
 import { ticketCatalog } from '@/lib/client/right-now';
+import { listTurnId, mentionedTickets } from '@/lib/client/ticket-lines';
 import { displayEvent } from '@/lib/domain/view';
 import { ringId } from '@/lib/domain/followup';
 import { findAsset } from '@/lib/domain/assets';
 import { downloadText, timeOfDay } from '@/lib/client/format';
+
+// The employee app has its own face: a warmer type and palette than the IT console (scoped by .wc-employee).
+const sans = Figtree({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-employee', display: 'swap' });
 
 const SESSION_KEY = 'askit.session';
 const CODE_RE = /^[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}$/;
@@ -48,6 +54,7 @@ export default function EmployeeApp({ setupWarning }: { setupWarning: string | n
     recentAction: lastEvent && now - lastEvent.at < 6000 ? lastEvent.title : null,
     thinkingHint: 'Checking status pages, guides and your tickets',
   });
+  useCallIntro(call, code, 2000);
   useDiagnostics(code, view?.diagnostics, call, refresh);
 
   // ---- session bootstrap: ?asset=ID starts a fresh session for that device; else ?session=CODE, then the last code used in this browser, else a new one
@@ -109,13 +116,21 @@ export default function EmployeeApp({ setupWarning }: { setupWarning: string | n
   }, [loaded, newestDoc, showDoc, call.phaseRef]);
 
   const openDoc = view?.documents.find((d) => d.id === docId) ?? null;
-  const { phase, deadline, transcript, status, issues, agentEvents } = call;
-  const left = deadline ? deadline - now : 0;
+  const { phase, transcript, issues, agentEvents } = call;
   const inCall = phase !== 'idle';
   // A follow-up or reminder rings only while no call is connecting or live on this session, here or on another screen.
   const { ringing, snooze } = useFollowUp(code, view?.followUp ?? null, (phase === 'idle' || phase === 'ended') && !!view && !view.call.active, now);
   const catalog = useMemo(() => (view ? ticketCatalog(view) : undefined), [view]);
   const asset = view?.asset ?? null;
+  // A ticket list ASK IT reads out shows as a small card under that turn, in the caption and the transcript.
+  const list = view?.ticketList ?? null;
+  const listTurn = list ? listTurnId(transcript, list.at) : null;
+  const attachment = list && listTurn ? { id: listTurn, node: <TicketListCard list={list} /> } : null;
+  // Tickets ASK IT is talking about light up in My tickets.
+  const lastAgent = transcript.findLast((m) => m.role === 'agent');
+  const lastAgentText = lastAgent?.text ?? '';
+  const listed = lastAgent && lastAgent.id === listTurn ? list : null;
+  const mentioned = useMemo(() => new Set([...mentionedTickets(lastAgentText), ...(listed?.tickets.map((t) => t.number) ?? [])]), [lastAgentText, listed]);
 
   const header = (
     <header className="wc-header">
@@ -137,12 +152,12 @@ export default function EmployeeApp({ setupWarning }: { setupWarning: string | n
   );
 
   const side = (
-    <section className="wc-side" aria-label="Your IT status">
+    <section className={inCall ? 'wc-side em-rail' : 'wc-side'} aria-label="Your IT status">
       {view ? (
         <>
           {sessionStatus === 'error' ? <p className="wc-notice wc-notice-warn" role="status">Connection lost. Showing the last known state while retrying…</p> : null}
           <RightNowCard view={view} now={now} inCall={inCall} />
-          <MyTickets view={view} />
+          <MyTickets view={view} highlight={phase === 'live' ? mentioned : undefined} />
           <DocumentList documents={view.documents} onOpen={showDoc} />
         </>
       ) : sessionStatus === 'not_found' || sessionError ? null : (
@@ -152,7 +167,7 @@ export default function EmployeeApp({ setupWarning }: { setupWarning: string | n
   );
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className={`wc-employee ${sans.variable} flex min-h-dvh flex-col`} data-in-call={inCall}>
       {header}
       {setupWarning && !inCall ? (
         <div className="mx-auto w-full max-w-[1200px] px-4 md:px-10">
@@ -212,28 +227,26 @@ export default function EmployeeApp({ setupWarning }: { setupWarning: string | n
           {side}
         </main>
       ) : (
-        <main id="main-content" className="wc-workspace wc-workspace-session">
-          <section className="wc-main wc-session" aria-label="Voice conversation">
-            <div className="wc-session-heading">
-              <h2>Conversation</h2>
-              <div className="wc-session-meta">
-                {phase === 'live' && deadline ? (
-                  <span className="wc-num" data-urgent={left < 60_000}>Session ends in {formatCountdown(left)}</span>
-                ) : null}
-                <span className="wc-status" data-tone={status.tone} role="status">
-                  <span className="wc-dot" aria-hidden="true" /> {status.label}
-                </span>
-              </div>
-            </div>
-            <CallBanners call={call} />
+        <main id="main-content" className="em-call">
+          <CallStage
+            call={call}
+            catalog={catalog}
+            now={now}
+            endedText={`Call ended${view?.call.endedAt ? ` at ${timeOfDay(view.call.endedAt)}` : ''}.`}
+            onRestart={() => call.startCall(false)}
+            attachment={attachment}
+          />
+          <section className="em-history" aria-label="Transcript">
+            <p className="wc-label em-history-head">Transcript{transcript.length ? <span className="wc-num">{transcript.length}</span> : null}</p>
             <Transcript
               catalog={catalog}
               messages={transcript}
-              placeholder={phase === 'connecting' ? 'Connecting you to ASK IT…' : phase === 'ended' ? 'No conversation was recorded.' : "Say hello, then tell IT what's wrong."}
+              announce={false}
+              maxTicketRows={3}
+              extras={attachment ? new Map([[attachment.id, attachment.node]]) : undefined}
+              placeholder={phase === 'ended' ? 'No conversation was recorded.' : 'Everything you and ASK IT say shows up here.'}
             />
-            <CallDock call={call} endedText={`Call ended${view?.call.endedAt ? ` at ${timeOfDay(view.call.endedAt)}` : ''}.`} onRestart={() => call.startCall(false)} />
           </section>
-          <aside className="wc-signal-area" aria-label="Call status"><CallSignal call={call} /></aside>
           {side}
           <CallMount call={call} />
         </main>

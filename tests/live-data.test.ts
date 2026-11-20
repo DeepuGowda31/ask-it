@@ -55,7 +55,7 @@ describe('live seed', () => {
   });
   it('keeps the simulated seed unchanged without credentials', () => {
     const s = freshState();
-    expect(s.account).toMatchObject({ userId: 'auth0|sim-priya', locked: true, factors: ['otp'], factorsKnown: true, source: 'simulated' });
+    expect(s.account).toMatchObject({ userId: 'auth0|sim-deepak', locked: true, factors: ['otp'], factorsKnown: true, source: 'simulated' });
     expect(s.outages).toEqual([expect.objectContaining({ incident: 'INC0011950', title: 'SAP Concur expense submissions failing', affected: 14 })]);
   });
   it('takes the live account address from the Auth0 settings', () => {
@@ -315,8 +315,9 @@ describe('live routes', () => {
     sys.live.blocked = true;
     sys.live.summary = 'SAP Concur outage, fix rolling out';
     expect((await invite(code)).status).toBe(200);
-    expect(sys.bodies[0].properties.llm.greeting_message).toMatch(/Heads-up: SAP Concur outage, fix rolling out right now/);
+    expect(sys.bodies[0].properties.llm.greeting_message).toBe('Hi Deepak, ASK IT here.');
     const body = await view(code);
+    expect(body.outages[0]).toMatchObject({ title: 'SAP Concur outage, fix rolling out' });
     expect(body.account.locked).toBe(true);
     expect(JSON.stringify(body)).not.toMatch(DEMO);
   });

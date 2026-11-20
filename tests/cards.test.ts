@@ -20,7 +20,7 @@ describe('issue milestones on the Slack card', () => {
       key: keyOf(out.state),
       status: 'in_progress',
       title: 'VPN drops every few minutes',
-      person: 'Priya Sharma',
+      person: 'Deepak Gowda',
       device: 'NB-2231',
       detail: "Guided fix started: VPN won't connect or keeps dropping in GlobalProtect",
       at: NOW,

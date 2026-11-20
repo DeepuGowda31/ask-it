@@ -159,10 +159,14 @@ const dashboardOf = (open: DeskIncident[], activity: Activity, now: number) => b
 
 type ItDesk = SessionState['itdesk'];
 type Board = NonNullable<ItDesk['board']>;
+// Incidents for a list, count or dashboard; the roster for people.
 export interface BoardRead {
-  rows: Result<DeskIncident[]>;
+  rows?: Result<DeskIncident[]>;
   activity?: Result<Activity>;
+  roster?: Result<Resource[]>;
 }
+
+export const boardReadOk = (read: BoardRead | null | undefined) => Boolean(read?.rows?.ok || read?.roster?.ok);
 
 // A list, count or dashboard read again the way its tool read it; null for boards that do not come from the incident table.
 export async function readBoard(desk: DeskAdapter, board: Board, now: number): Promise<BoardRead | null> {
@@ -170,6 +174,7 @@ export async function readBoard(desk: DeskAdapter, board: Board, now: number): P
     const [rows, activity] = await dashboardReads(desk, now);
     return { rows, activity };
   }
+  if (board.kind === 'people' || board.kind === 'person') return { roster: await desk.roster(TEAMS) };
   if ((board.kind !== 'list' && board.kind !== 'count') || !board.query) return null;
   const parsed = parseQueueArgs(board.query, now);
   return parsed.ok ? { rows: await desk.listOpen(parsed.query, (board.kind === 'list' ? SCREEN_LIMIT : COUNT_LIMIT) + 1) } : null;
@@ -178,7 +183,9 @@ export async function readBoard(desk: DeskAdapter, board: Board, now: number): P
 // The board and its list as ServiceNow says now; when it was asked stays, so the screen does not replay its entry. Null when a read failed.
 export function refreshBoard(desk: ItDesk, read: BoardRead, now: number): Pick<ItDesk, 'board' | 'queue'> | null {
   const board = desk.board;
-  if (!board || !read.rows.ok) return null;
+  if (!board) return null;
+  if (board.kind === 'people' || board.kind === 'person') return read.roster?.ok ? refreshPeople(desk, board, read.roster.value) : null;
+  if (!read.rows?.ok) return null;
   const rows = read.rows.value;
   if (board.kind === 'list') return { queue: rows.slice(0, SCREEN_LIMIT), board: { ...board, total: Math.min(rows.length, SCREEN_LIMIT), more: rows.length > SCREEN_LIMIT, syncedAt: now } };
   if (board.kind === 'count') {
@@ -659,6 +666,27 @@ function pickTeam(state: SessionState, raw: string): TeamPick {
 }
 
 const card = (p: Resource): PersonCard => ({ name: p.name, teams: p.teams, open: p.open });
+const ALL_TEAMS_TITLE = 'All teams';
+
+// A team and who of it to show; with nobody free the whole team shows, so the least busy can be picked.
+function rosterView(roster: Resource[], team: string | null, status: ResourceStatus) {
+  const everyone = roster.filter((p) => !team || p.teams.includes(team));
+  const free = everyone.filter((p) => !p.open.length);
+  const taken = everyone.filter((p) => p.open.length);
+  const nobodyFree = status === 'available' && !free.length;
+  const shown = status === 'all' || nobodyFree ? everyone : status === 'available' ? free : taken;
+  return { everyone, free, taken, shown, showing: nobodyFree ? ('all' as const) : status };
+}
+
+// People on screen as the roster says now; a person no longer in the teams keeps the last card.
+function refreshPeople(desk: ItDesk, board: Extract<Board, { kind: 'people' | 'person' }>, roster: Resource[]): Pick<ItDesk, 'board' | 'queue'> | null {
+  if (board.kind === 'person') {
+    const p = roster.find((r) => r.name === board.person.name);
+    return p ? { queue: desk.queue, board: { ...board, person: card(p) } } : null;
+  }
+  const { free, taken, shown, showing } = rosterView(roster, board.title === ALL_TEAMS_TITLE ? null : board.title, board.status);
+  return { queue: desk.queue, board: { ...board, status: showing, available: free.length, busy: taken.length, people: shown.map(card) } };
+}
 const tickets = (p: Resource) => plural(p.open.length, 'open ticket');
 
 // The first few joined by `sep` and how many more are on screen; null when all of them fit.
@@ -692,13 +720,8 @@ const listResources = tool<Result<Resource[]>>({
     if (!effect?.ok) return rosterFailure(effect);
     const team = pick.team;
     const status = (args.status || 'all') as ResourceStatus;
-    const everyone = effect.value.filter((p) => !team || p.teams.includes(team));
-    const free = everyone.filter((p) => !p.open.length);
-    const taken = everyone.filter((p) => p.open.length);
-    // Nobody free: show the whole team so the least busy can be picked.
-    const nobodyFree = status === 'available' && !free.length;
-    const shown = status === 'all' || nobodyFree ? everyone : status === 'available' ? free : taken;
-    state.itdesk.board = { kind: 'people', title: team ?? 'All teams', status: nobodyFree ? 'all' : status, available: free.length, busy: taken.length, people: shown.map(card), at: now };
+    const { everyone, free, taken, shown, showing } = rosterView(effect.value, team, status);
+    state.itdesk.board = { kind: 'people', title: team ?? ALL_TEAMS_TITLE, status: showing, available: free.length, busy: taken.length, people: shown.map(card), at: now };
     state.itdesk.focus = 'board';
     const where = team ? `in ${team}` : 'across the IT teams';
     const are = (n: number) => (n === 1 ? 'is' : 'are');
@@ -708,7 +731,8 @@ const listResources = tool<Result<Resource[]>>({
     else if (status === 'available') say = free.length ? `${plural(free.length, 'person', 'people')} ${where} ${are(free.length)} free: ${spokenNames(free.map((p) => p.name))}.` : `Nobody ${where} is free; the least busy is ${least.name} with ${tickets(least)}.`;
     else if (status === 'busy') say = taken.length ? `${plural(taken.length, 'person', 'people')} ${where} ${are(taken.length)} busy: ${spokenNames(taken.map((p) => `${p.name} with ${tickets(p)}`))}.` : `Nobody ${where} has an open ticket right now.`;
     else say = `${team ? `${team} has` : 'The IT teams have'} ${plural(everyone.length, 'person', 'people')}: ${free.length} available and ${taken.length} busy. They're on your screen.`;
-    const current = state.itdesk.current;
+    // Only an open incident nobody owns yet gets an offer to assign it.
+    const current = state.itdesk.current?.assignee ? null : state.itdesk.current;
     const ask = current && everyone.length && status !== 'busy' ? ' Who should take it?' : '';
     const people = shown.map((p) => ({ name: p.name, teams: p.teams, openTickets: p.open.length, tickets: p.open.map((t) => t.number) }));
     return {
@@ -747,8 +771,8 @@ const showResource = tool<Result<Resource[]>>({
     state.itdesk.focus = 'board';
     const list = p.open.map((t) => `${spokenTicket(t.number)}, ${t.summary}, ${t.priorityLabel.toLowerCase()} priority`);
     const work = p.open.length ? `has ${tickets(p)}: ${overflow(list, SPOKEN_TICKETS, '; ') ?? list.join('; ')}.` : 'is free right now.';
-    const current = state.itdesk.current;
-    const ask = current && current.assignee?.name !== p.name ? ` Should I assign it to ${p.name.split(' ')[0]}?` : '';
+    const current = state.itdesk.current?.assignee ? null : state.itdesk.current;
+    const ask = current ? ` Should I assign it to ${p.name.split(' ')[0]}?` : '';
     const team = incidentTeam(current);
     return {
       title: `Person: ${p.name} · ${p.open.length ? tickets(p) : 'available'}`,

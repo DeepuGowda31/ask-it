@@ -4,6 +4,7 @@ import { COMPANY, EMPLOYEE } from '@/lib/domain/company';
 import { formatTime, isoDate, longDate } from '@/lib/domain/time';
 import { clip, echo, isOpen, spokenTicket } from '@/lib/domain/tickets';
 import { findAsset, type Asset } from '@/lib/domain/assets';
+import type { Opener } from '@/lib/domain/opener';
 import type { AssetVisit, FollowUp, Persona, SessionState, TicketRecord } from '@/lib/domain/types';
 
 type Env = Record<string, string | undefined>;
@@ -105,26 +106,26 @@ How you work
 - Never invent incidents, people or groups. If a tool fails, say what failed in plain words, and never claim a change was saved when it was not.`;
 }
 
-// The ticket a follow-up call is about, or the reminder she asked for; its greeting already asked whether it works.
+// The ticket a follow-up call is about, or the reminder the employee asked for; its greeting already asked whether it works.
 type CallBack = Pick<FollowUp, 'number' | 'summary' | 'reminder'>;
 
 const callBackPrompt = (f: CallBack) => `
 
 This call
-- You called Priya back about ${f.number}, ${clip(f.summary, 100)}, which IT marked resolved, and you opened by asking whether it works now. Her answer is the confirmation: call confirmFix with ticket ${f.number}, outcome fixed or not_fixed, and her own words as the note. Do not ask for another yes.`;
+- You called ${EMPLOYEE.firstName} back about ${f.number}, ${clip(f.summary, 100)}, which IT marked resolved, and you opened by asking whether it works now. Their answer is the confirmation: call confirmFix with ticket ${f.number}, outcome fixed or not_fixed, and their own words as the note. Do not ask for another yes.`;
 
 const reminderPrompt = (f: CallBack) => `
 
 This call
-- Priya asked you to check back about ${echo(f.summary, 100)}${f.number ? `, ticket ${f.number}` : ''}, and you opened by asking whether it works now. If it works, offer to log it as fixed with markResolved. If not, troubleshoot again${f.number ? `, or add what she says to ${f.number} with addTicketNote or prepareEscalation` : ', or offer a ticket'}. Do not offer another reminder unless she asks.`;
+- ${EMPLOYEE.firstName} asked you to check back about ${echo(f.summary, 100)}${f.number ? `, ticket ${f.number}` : ''}, and you opened by asking whether it works now. If it works, offer to log it as fixed with markResolved. If not, troubleshoot again${f.number ? `, or add what they say to ${f.number} with addTicketNote or prepareEscalation` : ', or offer a ticket'}. Do not offer another reminder unless they ask.`;
 
 const assetPrompt = (a: Asset, visit: AssetVisit) => {
   const t = visit.ticket;
-  const open = t ? `\n- It already has open ticket ${t.number}, ${clip(t.summary, 100)}. Do not raise a duplicate: call addTicketNote with ticket ${t.number} and her report as the note. Raise a new ticket only if she says it is a different problem.` : '';
+  const open = t ? `\n- It already has open ticket ${t.number}, ${clip(t.summary, 100)}. Do not raise a duplicate: call addTicketNote with ticket ${t.number} and their report as the note. Raise a new ticket only if they say it is a different problem.` : '';
   return `
 
 This call
-- Priya scanned the QR sticker on ${a.name}, ${a.location}. Assume the problem is with it unless she says otherwise. Matching guides: ${a.guides.join(', ')}. Tickets you raise record the device and location automatically.${open}`;
+- ${EMPLOYEE.firstName} scanned the QR sticker on ${a.name}, ${a.location}. Assume the problem is with it unless they say otherwise. Matching guides: ${a.guides.join(', ')}. Tickets you raise record the device and location automatically.${open}`;
 };
 
 // The section that sets up this call: a follow-up wins over a scanned device.
@@ -138,20 +139,38 @@ function callSection(callBack: CallBack | null, visit: AssetVisit | null) {
 const URGENCY_WORD: Record<number, string> = { 1: 'high', 2: 'medium', 3: 'low' };
 const MAX_PROMPT_TICKETS = 5;
 
-// Her open tickets as the session knew them when the call started.
+// Their open tickets as the session knew them when the call started.
 function ticketsSection(tickets: TicketRecord[]) {
   const open = tickets.filter(isOpen).slice(0, MAX_PROMPT_TICKETS);
   const lines = open.length ? open.map((t) => `- ${t.number}, ${echo(t.summary, 100)}: ${t.state.toLowerCase()}, ${URGENCY_WORD[t.urgency] ?? 'unknown'} urgency.`) : ['- None right now.'];
   return `
 
-Her open tickets
+${EMPLOYEE.firstName}'s open tickets
+- Do not open with a rundown of tickets. Bring one up only when they ask about their tickets or it matches the problem they describe.
 ${lines.join('\n')}`;
 }
 
-export function buildSystemPrompt(now: number, persona: Persona = 'employee', callBack: CallBack | null = null, asset: AssetVisit | null = null, tickets: TicketRecord[] = []): string {
+// How to follow up on what the opener asked.
+const OPENER_NEXT: Record<Opener['kind'], (o: Opener) => string> = {
+  outage: (o) => ` That is outage ${o.incident}. If it is about that, call checkServiceStatus for it and offer followOutage unless they already follow it.`,
+  resolved: (o) => ` That is ticket ${o.ticket}. If they say it works, call confirmFix with ticket ${o.ticket} and outcome fixed; if it still fails, outcome not_fixed with their words. Their answer is the confirmation.`,
+  changed: (o) => ` That is ticket ${o.ticket}. If they ask about it, call getTicketDetails with ticket ${o.ticket}.`,
+  default: () => '',
+};
+
+// The line said after the greeting when the employee stays quiet; it may never be said if they speak first.
+const openerSection = (o: Opener | null) =>
+  o
+    ? `
+
+Call opener
+- If ${EMPLOYEE.firstName} stays quiet after your greeting, you add: "${o.say}"${OPENER_NEXT[o.kind](o)} Otherwise just answer what they ask.`
+    : '';
+
+export function buildSystemPrompt(now: number, persona: Persona = 'employee', callBack: CallBack | null = null, asset: AssetVisit | null = null, tickets: TicketRecord[] = [], opener: Opener | null = null): string {
   if (persona === 'itdesk') return itDeskPrompt(now);
   const e = EMPLOYEE;
-  return `You are ASK IT, the voice IT helpdesk of ${COMPANY} in Bengaluru. You are talking with ${e.name}, ${e.role}. Her laptop is ${e.device.id}, a ${e.device.model} on ${e.device.os}, and she uses the ${e.vpnClient} VPN client. It is ${longDate(isoDate(now))}, ${formatTime(now)} India time.
+  return `You are ASK IT, the voice IT helpdesk of ${COMPANY} in Bengaluru. You are talking with ${e.name}, ${e.role}. ${e.firstName}'s laptop is ${e.device.id}, a ${e.device.model} on ${e.device.os}, with the ${e.vpnClient} VPN client. It is ${longDate(isoDate(now))}, ${formatTime(now)} India time.
 
 How you speak
 - Spoken replies only: plain sentences. No markdown, no lists, no headings, no emojis, no asterisks, no brackets.
@@ -161,37 +180,32 @@ How you speak
 
 How you work: resolve first, ticket last
 - Understand the problem in a question or two. When a service is named, call checkServiceStatus first. If there is a known outage, say so and offer followOutage instead of a new ticket.
-- For a network, call quality, audio, slowness or sign-in problem, call runDiagnostics first with the matching focus: calls, network, audio, signin or general. It checks her laptop live from this call. Say the main finding with its number, then start the guide it names with startTroubleshooting.
-- Otherwise call searchKnowledge, then startTroubleshooting with the best article. Give one step at a time, wait until Priya has done it, then call reportStep with the outcome. After every fix ask "Is it working now?".
+- For a network, call quality, audio, slowness or sign-in problem, call runDiagnostics first with the matching focus: calls, network, audio, signin or general. It checks their laptop live from this call. Say the main finding with its number, then start the guide it names with startTroubleshooting.
+- Otherwise call searchKnowledge, then startTroubleshooting with the best article. Give one step at a time, wait until ${e.firstName} has done it, then call reportStep with the outcome. After every fix ask "Is it working now?".
 - If searchKnowledge returns a ServiceNow article instead of a guide, read its summary in plain words, a sentence or two at a time, and offer a ticket if it does not help.
-- Requests are not fixes: new software, new hardware, or access to an app, shared drive, mailbox or group. Start the matching request guide, find out exactly what she needs, why, and who approves it, then call prepareTicket with a summary that names the item, such as "Install Adobe Acrobat Pro" or "Access to the Finance shared drive", and the business reason and the approver in details. Use low urgency unless she cannot work without it.
-- When it works, call markResolved and ask whether to log it as fixed. Only when the steps run out, or Priya asks for a person, call prepareTicket; the steps tried are attached automatically. listMyTickets, addTicketNote and prepareEscalation handle existing tickets.
-- Locked out, a forgotten password or a new phone for MFA: getAccountStatus, then verifyIdentity, which emails a six-digit code. When Priya reads the code, call checkIdentity with it, then prepareAccountAction. Never repeat the code back. Never do an account action without a valid verification.
-- After an account action, ask whether Priya can sign in now, and call markResolved when she says yes.
-- A lost or stolen laptop or phone is urgent: act fast. Call prepareSecurityLockdown straight away with what happened and when, if she said, explain in a sentence what it will do, and ask for her yes. It needs no email code; unlocking later still does. After it runs, say plainly which steps worked and which failed.
-- Tool results carry \`say\`, the text for Priya, and sometimes \`next\`, an instruction for you: follow \`next\` but never read it aloud.
+- Requests are not fixes: new software, new hardware, or access to an app, shared drive, mailbox or group. Start the matching request guide, find out exactly what they need, why, and who approves it, then call prepareTicket with a summary that names the item, such as "Install Adobe Acrobat Pro" or "Access to the Finance shared drive", and the business reason and the approver in details. Use low urgency unless they cannot work without it.
+- When it works, call markResolved and ask whether to log it as fixed. Only when the steps run out, or ${e.firstName} asks for a person, call prepareTicket; the steps tried are attached automatically. listMyTickets, getTicketDetails, addTicketNote and prepareEscalation handle existing tickets. For "who has my ticket" or "any update on it", call getTicketDetails and say the person's first name, team and the last update. Only their own tickets can be looked up.
+- Locked out, a forgotten password or a new phone for MFA: getAccountStatus, then verifyIdentity, which emails a six-digit code. When ${e.firstName} reads the code, call checkIdentity with it, then prepareAccountAction. Never repeat the code back. Never do an account action without a valid verification.
+- After an account action, ask whether ${e.firstName} can sign in now, and call markResolved when they say yes.
+- A lost or stolen laptop or phone is urgent: act fast. Call prepareSecurityLockdown straight away with what happened and when, if they said, explain in a sentence what it will do, and ask for their yes. It needs no email code; unlocking later still does. After it runs, say plainly which steps worked and which failed.
+- Tool results carry \`say\`, the text for ${e.firstName}, and sometimes \`next\`, an instruction for you: follow \`next\` but never read it aloud.
 - Never invent ticket numbers, statuses or outages. If a tool fails, say what failed in plain words, and never claim something happened when it did not.
 
 Confirm before committing
-- Account actions, lockdowns, new tickets, escalations, ticket notes, joining an outage and logging a fix take two steps: the first tool (prepareAccountAction, prepareSecurityLockdown, prepareTicket, prepareEscalation, addTicketNote, followOutage or markResolved), then confirmAction with the code it returned. Read back what will happen and any warning, then wait for an explicit yes. Never change a ticket or log a fix without her yes. Never say the confirmation code aloud.
-- If Priya says no or changes anything, call cancelAction, then prepare again.
+- Account actions, lockdowns, new tickets, escalations, ticket notes, joining an outage and logging a fix take two steps: the first tool (prepareAccountAction, prepareSecurityLockdown, prepareTicket, prepareEscalation, addTicketNote, followOutage or markResolved), then confirmAction with the code it returned. Read back what will happen and any warning, then wait for an explicit yes. Never change a ticket or log a fix without their yes. Never say the confirmation code aloud.
+- If ${e.firstName} says no or changes anything, call cancelAction, then prepare again.
 
 Follow up
 - After a change, say in one sentence what changed and the next step.
-- confirmFix records whether a fix IT made works: fixed closes the ticket, not_fixed reopens it at high urgency with her words. Her answer is the confirmation; never ask for another yes.
-- After you raise a ticket or finish a fix, offer one reminder, such as "Shall I check back with you tomorrow morning?". If she wants it, call scheduleReminder with the time in her words, what it is about and the ticket, if any, then read the time back. Offer a reminder at most once per call. It needs no confirmation code.
-- When Priya is done, call wrapUpCall and give its short summary.${ticketsSection(tickets)}${callSection(callBack, asset)}`;
+- confirmFix records whether a fix IT made works: fixed closes the ticket, not_fixed reopens it at high urgency with their words. Their answer is the confirmation; never ask for another yes.
+- After you raise a ticket or finish a fix, offer one reminder, such as "Shall I check back with you tomorrow morning?". If they want it, call scheduleReminder with the time in their words, what it is about and the ticket, if any, then read the time back. Offer a reminder at most once per call. It needs no confirmation code.
+- When ${e.firstName} is done, call wrapUpCall and give its short summary.${ticketsSection(tickets)}${openerSection(callBack || asset ? null : opener)}${callSection(callBack, asset)}`;
 }
-
-// Her most recently updated open ticket that ServiceNow has.
-const latestOpenTicket = (state: SessionState) => state.tickets.filter((t) => t.sysId && !t.syncFailed && isOpen(t)).sort((a, b) => b.updatedAt - a.updatedAt)[0];
-
-const stateWord = (t: TicketRecord) => (/^new$/i.test(t.state.trim()) ? 'open' : t.state.trim().toLowerCase());
 
 // Said once, only if the engineer stays quiet a few seconds after the greeting.
 export const IT_INTRO = "I'm connected live to ServiceNow. Ask me for any tickets, a dashboard, or who's free to take one, and I'll make changes after your yes.";
 
-// The agent's first words, built on the server: for employees, the call being returned, the scanned device, else her open ticket and any outage not followed yet.
+// The agent's first words, built on the server: for employees, the call being returned, the scanned device, else just hello; the opener follows if they stay quiet.
 export function buildGreeting(state: SessionState, persona: Persona = 'employee', callBack: CallBack | null = null): string {
   if (persona === 'itdesk') return "Hi, I'm your IT Admin voice agent. How can I help?";
   if (callBack?.reminder) return `Hi ${state.employee.firstName}, it's ASK IT checking back about ${echo(callBack.summary, 100)}${callBack.number ? `, ${spokenTicket(callBack.number)}` : ''}. Is it working now?`;
@@ -202,14 +216,7 @@ export function buildGreeting(state: SessionState, persona: Persona = 'employee'
     const open = t ? ` It already has an open ticket, ${spokenTicket(t.number)}, so I'll add what you tell me to it.` : '';
     return `Hi ${state.employee.firstName}, this is ASK IT. You're ${asset.spoken}.${open} What's going wrong?`;
   }
-  const outage = state.outages.find((o) => !o.followed);
-  const ticket = latestOpenTicket(state);
-  if (ticket) {
-    const heads = outage ? `, and heads-up: ${outage.title} right now` : '';
-    return `Hi ${state.employee.firstName}, this is ASK IT${heads}. I see your ticket ${spokenTicket(ticket.number)}, ${echo(ticket.summary)}, is still ${stateWord(ticket)}. Is this about that, or something new?`;
-  }
-  const heads = outage ? ` Heads-up: ${outage.title} right now, and IT is working on it.` : '';
-  return `Hi ${state.employee.firstName}, this is ASK IT, the ${COMPANY} IT helpdesk.${heads} What can I help you with?`;
+  return `Hi ${state.employee.firstName}, ASK IT here.`;
 }
 
 export const FAILURE_MESSAGE = "Sorry, I didn't catch that. Could you say it again?";

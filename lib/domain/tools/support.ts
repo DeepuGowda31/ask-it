@@ -1,11 +1,13 @@
 import type { Result } from '@/lib/integrations/http';
 import type { KbArticle } from '@/lib/integrations/servicenow-kb';
-import type { LiveStatus, NewTicket } from '@/lib/integrations/types';
+import type { LiveStatus } from '@/lib/integrations/types';
 import { issueMilestone } from '../cards';
+import { fixTicket, openAccountFix } from '../fixes';
+import { EMPLOYEE } from '../company';
 import { ARTICLES, findArticle, type Article } from '../kb';
 import { confident, rankKnowledge, searchKnowledge, tokenize } from '../search';
 import { SERVICES, findService, outageName } from '../services';
-import { clip, echo, parseTicketNumber, spokenTicket, ticketDescription } from '../tickets';
+import { clip, echo, parseTicketNumber, spokenTicket } from '../tickets';
 import type { Outage, SessionState } from '../types';
 import { failed, ok, plural, prepare, tool, type Outcome } from './shared';
 
@@ -50,7 +52,7 @@ const checkServiceStatus = tool<LiveStatus>({
     if (!service.feed) {
       const outage = state.outages.find((o) => o.service === service.key);
       if (outage) {
-        const next = outage.followed ? undefined : 'If she wants to be added, call followOutage now; its read-back is the only yes to ask for.';
+        const next = outage.followed ? undefined : 'If they want to be added, call followOutage now; its read-back is the only yes to ask for.';
         return { title: `Status: ${outage.title}`, result: ok(outageSay(outage), { service: name, level: 'outage', source: 'internal', incident: outage.incident, affected: outage.affected, followed: outage.followed }, next) };
       }
       return { title: `Status: ${name} · no known issues`, result: ok(`There are no known issues with ${name} right now, so let's troubleshoot on your side.`, { service: name, level: 'operational', source: 'internal' }) };
@@ -72,7 +74,7 @@ function findOutage(state: SessionState, raw: string): Outage | undefined {
 const followOutage = tool({
   name: 'followOutage',
   description:
-    'Step 1 of adding Priya as affected to the master incident of a known outage, instead of raising a duplicate ticket; she then gets updates when it is fixed. Reads the outage back and returns a confirmation code: ask for her yes, then call confirmAction.',
+    `Step 1 of adding ${EMPLOYEE.firstName} as affected to the master incident of a known outage, instead of raising a duplicate ticket; they then get updates when it is fixed. Reads the outage back and returns a confirmation code: ask for their yes, then call confirmAction.`,
   params: { incident: { description: 'Master incident like INC0011950, the service name, or empty string for the current outage', allowEmpty: true } },
   run({ state, now }, args) {
     const outage = findOutage(state, args.incident);
@@ -89,7 +91,7 @@ const followOutage = tool({
 
 // Brackets are never voiced, so they are dropped from titles read out.
 const spokenTitles = (kb: KbArticle[]) => kb.map((a) => `"${a.title.replace(/[()[\]{}]/g, '').replace(/\s+/g, ' ').trim()}"`).join('; ');
-const READ_ARTICLE = 'To use a ServiceNow article, read its summary to Priya in plain words, a sentence or two at a time.';
+const READ_ARTICLE = `To use a ServiceNow article, read its summary to ${EMPLOYEE.firstName} in plain words, a sentence or two at a time.`;
 
 const searchKnowledgeTool = tool<Result<KbArticle[]>>({
   name: 'searchKnowledge',
@@ -143,14 +145,14 @@ const startTroubleshooting = tool({
   description: 'Start a guided fix from a knowledge base article. Returns step 1; give one step at a time and report each with reportStep.',
   params: {
     articleId: { description: `Article id from searchKnowledge: ${ARTICLES.map((a) => a.id).join(', ')}` },
-    issue: { description: "Priya's problem in her words, or empty string", allowEmpty: true },
+    issue: { description: `${EMPLOYEE.firstName}'s problem in their words, or empty string`, allowEmpty: true },
   },
   run({ state, now }, args) {
     const article = findArticle(args.articleId);
     if (!article) {
       const close = searchKnowledge(`${args.issue} ${args.articleId}`);
       const hint = close.length ? ` The closest is "${close[0].title}". Shall I use that?` : '';
-      const next = close.length ? `If she agrees, call startTroubleshooting with articleId ${close[0].id}.` : undefined;
+      const next = close.length ? `If they agree, call startTroubleshooting with articleId ${close[0].id}.` : undefined;
       return failed(`Guided fix: unknown article "${args.articleId}"`, 'unknown_article', `I don't have that guide.${hint}`, close.map((a) => a.id), next);
     }
     state.troubleshooting = { articleId: article.id, title: article.title, issue: args.issue || article.title, stepIndex: 0, status: 'active', startedAt: now, log: [] };
@@ -164,7 +166,7 @@ const reportStep = tool({
   description: 'Report how the current guided-fix step went: fixed (problem solved), not_fixed (did it, still broken), done (step completed), skipped. Returns the next step, or says the steps ran out.',
   params: {
     outcome: { description: 'fixed, not_fixed, done or skipped', enum: ['fixed', 'not_fixed', 'done', 'skipped'] },
-    note: { description: 'What Priya saw, or empty string', allowEmpty: true },
+    note: { description: `What ${EMPLOYEE.firstName} saw, or empty string`, allowEmpty: true },
   },
   run({ state, now }, args) {
     const t = state.troubleshooting;
@@ -174,7 +176,7 @@ const reportStep = tool({
     }
     if (t.status === 'fixed') return failed('Step report: already fixed', 'already_fixed', 'We already found the fix.', undefined, 'Call markResolved, or startTroubleshooting again if it broke.');
     if (t.status === 'exhausted') {
-      return failed('Step report: no steps left', 'steps_finished', "We've already tried every step in this guide. Shall I raise a ticket with what we tried?", ['prepareTicket'], 'If she agrees, call prepareTicket.');
+      return failed('Step report: no steps left', 'steps_finished', "We've already tried every step in this guide. Shall I raise a ticket with what we tried?", ['prepareTicket'], 'If they agree, call prepareTicket.');
     }
     const outcome = args.outcome as 'fixed' | 'not_fixed' | 'done' | 'skipped';
     const i = t.stepIndex;
@@ -188,7 +190,7 @@ const reportStep = tool({
       t.status = 'exhausted';
       return {
         title,
-        result: ok("That was the last step in the guide, and it's still not fixed. I can raise a ticket with everything we tried. Shall I?", { exhausted: true }, 'If she agrees, call prepareTicket; the steps tried are attached automatically.'),
+        result: ok("That was the last step in the guide, and it's still not fixed. I can raise a ticket with everything we tried. Shall I?", { exhausted: true }, 'If they agree, call prepareTicket; the steps tried are attached automatically.'),
       };
     }
     t.stepIndex = i + 1;
@@ -196,34 +198,30 @@ const reportStep = tool({
   },
 });
 
-// One resolution per guided fix, or per summary when there was none.
+// One resolution per guided fix, then per account fix on the call, else per summary.
 function resolutionKey(state: SessionState, summary: string): string {
   const t = state.troubleshooting;
-  if (t && t.status !== 'ticketed') return `fix:${t.startedAt}`;
+  const account = openAccountFix(state);
+  if (t && t.status !== 'ticketed' && t.status !== 'resolved') return `fix:${t.startedAt}`;
+  if (account) return `account:${account.at}`;
+  if (t?.status === 'resolved') return `fix:${t.startedAt}`;
   return `note:${summary.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()}`;
-}
-
-function resolvedTicket(state: SessionState, summary: string, now: number): Omit<NewTicket, 'correlationId'> {
-  const t = state.troubleshooting;
-  return {
-    shortDescription: `Resolved by ASK IT: ${summary}`.slice(0, 160),
-    description: ticketDescription(state, t, `Resolution: ${summary}`, now),
-    urgency: 3,
-    impact: 3,
-    category: (t && findArticle(t.articleId)?.category) || 'inquiry',
-  };
 }
 
 const markResolved = tool({
   name: 'markResolved',
   description:
-    'Step 1 of logging the issue as resolved by ASK IT once Priya says it works: on her yes, confirmAction creates a resolved incident in ServiceNow so the fix counts without an open ticket. The same resolution is logged once. Returns a confirmation code for confirmAction.',
+    `Step 1 of logging the issue as resolved by ASK IT once ${EMPLOYEE.firstName} says it works, after a guided fix or an account action: on their yes, confirmAction creates one resolved incident in ServiceNow with the steps that worked, so the fix counts without an open ticket. The same resolution is logged once. Returns a confirmation code for confirmAction.`,
   params: { summary: { description: 'One sentence: what was wrong and what fixed it' } },
   run({ state, now }, args): Outcome {
     const key = resolutionKey(state, args.summary);
     const last = state.lastResolution;
-    if (last?.key === key && last.status === 'done') return { title: 'Already logged as resolved', result: ok("That's already logged as resolved, nothing changed.", { alreadyResolved: true, number: last.number }) };
-    const payload = { kind: 'resolution' as const, key, summary: args.summary, ticket: resolvedTicket(state, args.summary, now) };
+    const t = state.troubleshooting;
+    // A guided fix marked resolved was logged, even when another fix was logged after it.
+    const logged = last?.key === key && last.status === 'done' ? last.number : t?.status === 'resolved' && key === `fix:${t.startedAt}` ? t.ticket : undefined;
+    if (logged) return { title: 'Already logged as resolved', result: ok("That's already logged as resolved, nothing changed.", { alreadyResolved: true, number: logged }) };
+    const account = openAccountFix(state);
+    const payload = { kind: 'resolution' as const, key, summary: args.summary, ticket: fixTicket(state, args.summary, now, account), ...(account ? { account: account.at } : {}) };
     return prepare(state, now, payload, `Log as fixed by ASK IT: ${clip(args.summary, 120)}`, [], `Shall I log this as fixed on the call: ${echo(args.summary, 120)}?`);
   },
 });

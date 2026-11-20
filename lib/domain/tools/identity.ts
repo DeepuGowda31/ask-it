@@ -1,7 +1,7 @@
 import { describeFailure, success, type Failure, type Result } from '@/lib/integrations/http';
 import type { AccountAction, AccountInfo, IdentityAdapter, Mode } from '@/lib/integrations/types';
 import { issueMilestone } from '../cards';
-import { CODE_TTL_MS, MAX_CODE_ATTEMPTS, VERIFICATION_TTL_MS } from '../company';
+import { CODE_TTL_MS, EMPLOYEE, MAX_CODE_ATTEMPTS, VERIFICATION_TTL_MS } from '../company';
 import { clip, spokenDigits } from '../tickets';
 import { DAY, MINUTE } from '../time';
 import type { SessionState, Verification, VerificationStatus } from '../types';
@@ -45,7 +45,7 @@ const minutesLeft = (state: SessionState, now: number) => Math.max(1, Math.ceil(
 
 const verifyIdentity = tool<{ sent: Result<string | null> }>({
   name: 'verifyIdentity',
-  description: "Email a six-digit verification code to Priya's work address. Needed before unlocking her account or resetting her password or MFA. Then ask her to read the code and call checkIdentity.",
+  description: `Email a six-digit verification code to ${EMPLOYEE.firstName}'s work address. Needed before unlocking the account or resetting the password or MFA. Then ask ${EMPLOYEE.firstName} to read the code and call checkIdentity.`,
   params: {},
   async effect({ state, now, deps }) {
     return isVerified(state, now) ? undefined : { sent: await deps.identity.sendCode() };
@@ -56,7 +56,7 @@ const verifyIdentity = tool<{ sent: Result<string | null> }>({
     if (!effect.sent.ok) return identityFailure('Verification code not sent', effect.sent.error, 'send the code');
     state.verification = { status: 'pending', sentAt: now, approvedAt: null, expiresAt: null, attempts: 0, checking: [], simulatedCode: effect.sent.value };
     const alert = issueMilestone(state, now, 'waiting_employee', 'Verification code sent to the employee', { title: 'Account access' });
-    return { title: 'Verification code emailed', alerts: [alert], result: ok(CODE_SENT_SAY, { status: 'code_sent', expiresInMinutes: CODE_TTL_MS / MINUTE }, 'When Priya reads the code, call checkIdentity with it. Never repeat the code.') };
+    return { title: 'Verification code emailed', alerts: [alert], result: ok(CODE_SENT_SAY, { status: 'code_sent', expiresInMinutes: CODE_TTL_MS / MINUTE }, `When ${EMPLOYEE.firstName} reads the code, call checkIdentity with it. Never repeat the code.`) };
   },
 });
 
@@ -69,8 +69,8 @@ function codeToCheck(state: SessionState, raw: string, now: number): string | nu
 
 const checkIdentity = tool<{ sentAt: number | null; checked: Result<boolean> }>({
   name: 'checkIdentity',
-  description: 'Check the six-digit code Priya reads from her email. Three wrong tries or five minutes without a match need a new code from verifyIdentity.',
-  params: { code: { description: 'The code as Priya said it, digits or words, e.g. "421 987" or "four two one nine eight seven"' } },
+  description: `Check the six-digit code ${EMPLOYEE.firstName} reads from the email. Three wrong tries or five minutes without a match need a new code from verifyIdentity.`,
+  params: { code: { description: `The code as ${EMPLOYEE.firstName} said it, digits or words, e.g. "421 987" or "four two one nine eight seven"` } },
   // Reserves the attempt before the check, so parallel calls cannot exceed the limit.
   begin(state, args, now, claim) {
     if (!codeToCheck(state, args.code, now)) return false;
@@ -133,7 +133,7 @@ function accountSay(state: SessionState, now: number) {
 
 const getAccountStatus = tool<{ mode: Mode; user: Result<AccountInfo> }>({
   name: 'getAccountStatus',
-  description: "Priya's account in Auth0: whether it is locked, when the password was last reset, and her multi-factor methods.",
+  description: `${EMPLOYEE.firstName}'s account in Auth0: whether it is locked, when the password was last reset, and the multi-factor methods.`,
   params: {},
   minutesSaved: 3,
   async effect({ deps }) {
@@ -186,9 +186,9 @@ const LOCKDOWN_LEAD =
 const prepareSecurityLockdown = tool({
   name: 'prepareSecurityLockdown',
   description:
-    "Step 1 when Priya's laptop or phone is lost or stolen: blocks her account, signs her out everywhere, revokes saved sign-ins, resets MFA, raises a P1 security incident and alerts IT. No email code needed. Returns a confirmation code for confirmAction.",
+    `Step 1 when ${EMPLOYEE.firstName}'s laptop or phone is lost or stolen: blocks the account, signs ${EMPLOYEE.firstName} out everywhere, revokes saved sign-ins, resets MFA, raises a P1 security incident and alerts IT. No email code needed. Returns a confirmation code for confirmAction.`,
   params: {
-    what: { description: 'What happened, in her words, e.g. "laptop left in an Uber"' },
+    what: { description: 'What happened, in their own words, e.g. "laptop left in an Uber"' },
     when: { description: 'When it happened, e.g. "about an hour ago", or empty string', allowEmpty: true },
   },
   run({ state, now }, args) {

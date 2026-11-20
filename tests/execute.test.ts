@@ -113,7 +113,7 @@ describe('IT channel alerts', () => {
 });
 
 describe('alert delivery routes', () => {
-  const card = { key: 'NMB-7K2:ISS-101', status: 'in_progress' as const, title: 'VPN <drops>', person: 'Priya Sharma', device: 'NB-2231', detail: 'Guided fix started', at: NOW };
+  const card = { key: 'NMB-7K2:ISS-101', status: 'in_progress' as const, title: 'VPN <drops>', person: 'Deepak Gowda', device: 'NB-2231', detail: 'Guided fix started', at: NOW };
   it('updates Slack cards through the Web API when the bot is configured', async () => {
     const calls: { url: string; body: Record<string, unknown> }[] = [];
     const f = (async (input: RequestInfo | URL, init?: RequestInit) => {

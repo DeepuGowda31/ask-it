@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { failure, success } from '@/lib/integrations/http';
 import type { NewTicket, RemoteTicket } from '@/lib/integrations/types';
 import { DAY, MINUTE } from '@/lib/domain/time';
+import { buildSessionView } from '@/lib/domain/view';
+import type { SessionState } from '@/lib/domain/types';
 import { NOW, call, codeOf, confirmed, freshState } from './helpers';
 
 async function exhaustedVpn() {
@@ -31,7 +33,7 @@ describe('prepareTicket', () => {
     expect(description).toMatch(/5 of 5 steps tried/);
     expect(description).toMatch(/1\. Click the GlobalProtect globe.*Result: not fixed\. Note: dropped again after 2 minutes/);
   });
-  it('mentions verification in the ticket when Priya is verified', async () => {
+  it('mentions verification in the ticket when Deepak is verified', async () => {
     let s = (await call(freshState(), 'verifyIdentity', {}, { code: '421987' })).state;
     s = (await call(s, 'checkIdentity', { code: '421987' })).state;
     const prep = await call(s, 'prepareTicket', { summary: 'Laptop fan loud', urgency: 'low', details: '' });
@@ -121,33 +123,113 @@ describe('confirming a ticket', () => {
 });
 
 describe('listMyTickets', () => {
-  it('never reads brackets from a ticket title aloud', async () => {
-    const remote = [{ number: 'INC0010001', sysId: 'a'.repeat(32), summary: '[review test] Adapter check (old)', state: 'Resolved', urgency: 1 as const, createdAt: NOW, updatedAt: NOW }];
-    const out = await call(freshState(), 'listMyTickets', { status: 'all' }, { tickets: { mode: 'live', listMine: async () => success(remote) } });
-    expect(out.result.say).toMatch(/I-N-C one zero zero zero one, review test Adapter check old, resolved/);
-  });
+  const list = (state: SessionState, status: string, period = '', o: Parameters<typeof call>[3] = {}) => call(state, 'listMyTickets', { status, period }, o);
+  const numbers = (out: { result: { data?: unknown } }) => (out.result.data as { tickets: { number: string }[] }).tickets.map((t) => t.number);
   const REMOTE: RemoteTicket[] = [
     { number: 'INC0010042', sysId: 'abc', summary: 'Monitor flickers', state: 'In Progress', urgency: 2, createdAt: NOW - 60 * MINUTE, updatedAt: NOW - 30 * MINUTE },
     { number: 'INC0010001', sysId: 'def', summary: 'Old request', state: 'Closed', urgency: 3, createdAt: NOW - 9 * 1440 * MINUTE, updatedAt: null },
   ];
-  it('refreshes the mirror from ServiceNow', async () => {
-    const out = await call(freshState(), 'listMyTickets', { status: 'open' }, { tickets: { mode: 'live', listMine: async () => success(REMOTE) } });
+  it('refreshes the mirror from ServiceNow and sums up the open ones instead of reading them out', async () => {
+    const out = await list(freshState(), 'open', '', { tickets: { mode: 'live', listMine: async () => success(REMOTE) } });
     expect(out.state.tickets[0]).toMatchObject({ number: 'INC0010042', source: 'live', sysId: 'abc' });
-    expect(out.result.data).toMatchObject({ stale: false, tickets: [expect.objectContaining({ number: 'INC0010042' }), expect.objectContaining({ number: 'INC0011994' })] });
-    expect(out.result.say).toMatch(/I-N-C one zero zero four two/);
-    expect(out.result.say).not.toMatch(/Old request/);
+    expect(out.result.data).toMatchObject({ stale: false, status: 'open', period: '', total: 2, tickets: [expect.objectContaining({ number: 'INC0010042', summary: 'Monitor flickers', state: 'In Progress', urgency: 2, source: 'live', syncFailed: false }), expect.objectContaining({ number: 'INC0011994' })] });
+    expect(out.result.say).toBe('You have 2 open tickets, both in progress. Want details on any of them?');
+    expect(out.result.next).toMatch(/do not read them aloud/);
   });
-  it('lists everything with status "all" and defaults to open', async () => {
-    const all = await call(freshState(), 'listMyTickets', { status: 'all' });
-    expect((all.result.data as { tickets: unknown[] }).tickets).toHaveLength(2);
-    const open = await call(freshState(), 'listMyTickets', { status: '' });
-    expect((open.result.data as { tickets: unknown[] }).tickets).toHaveLength(1);
+  it('lists everything when the status is empty or "all"', async () => {
+    const all = await list(freshState(), '');
+    expect(numbers(all)).toEqual(['INC0011994', 'INC0011987']);
+    expect(all.result.say).toBe('You have 2 tickets, 1 open and 1 resolved. Want details on any of them?');
+    expect(numbers(await list(freshState(), 'all'))).toEqual(['INC0011994', 'INC0011987']);
+  });
+  it('lists only resolved ones, by name, when asked', async () => {
+    const out = await list(freshState(), 'resolved');
+    expect(numbers(out)).toEqual(['INC0011987']);
+    expect(out.result.say).toBe('You have one resolved ticket, your Outlook ticket. Want the details?');
+  });
+  it('names a single open ticket with its state', async () => {
+    const out = await list(freshState(), 'open');
+    expect(out.result.say).toBe('You have one open ticket, your Figma ticket, in progress. Want the details?');
+  });
+  it('filters by when it was raised, or resolved', async () => {
+    const s = freshState();
+    expect((await list(s, 'resolved', 'this_week')).result.say).toBe('You have no resolved tickets this week.');
+    expect(numbers(await list(s, 'resolved', 'this_month'))).toEqual(['INC0011987']);
+    expect((await list(s, 'open', 'today')).result.say).toBe('You have no open tickets raised today.');
+    expect(numbers(await list(s, 'open', 'last_7_days'))).toEqual(['INC0011994']);
+    expect(numbers(await list(s, '', 'yesterday'))).toEqual([]);
+    expect((await list(s, '', 'yesterday')).result.say).toBe('You have no tickets from yesterday.');
+    const fixed = await confirmed(s, 'markResolved', { summary: 'VPN fixed by reconnecting' });
+    const week = await list(fixed.state, 'resolved', 'this_week');
+    expect(numbers(week)).toEqual(['INC0012001']);
+    expect(week.result.say).toBe('You have one resolved ticket this week, your VPN ticket. Want the details?');
+    const both = await list(fixed.state, 'resolved', 'this_month');
+    expect(both.result.say).toBe('You have 2 resolved tickets this month, 1 fixed on a call with ASK IT. Want details on any of them?');
+  });
+  it('never reads brackets from a ticket title aloud', async () => {
+    const remote = [{ number: 'INC0010001', sysId: 'a'.repeat(32), summary: '[review test] Adapter check (old)', state: 'Resolved', urgency: 1 as const, createdAt: NOW, updatedAt: NOW }];
+    const out = await list(freshState(), 'resolved', 'today', { tickets: { mode: 'live', listMine: async () => success(remote) } });
+    expect(out.result.say).toBe('You have one resolved ticket today, your ticket about review test Adapter check old. Want the details?');
   });
   it('returns the last mirror and says it may be stale when ServiceNow fails', async () => {
-    const out = await call(freshState(), 'listMyTickets', { status: 'open' }, { tickets: { listMine: async () => failure({ kind: 'timeout' }) } });
+    const out = await list(freshState(), 'open', '', { tickets: { listMine: async () => failure({ kind: 'timeout' }) } });
     expect(out.status).toBe(200);
     expect(out.result.data).toMatchObject({ stale: true, tickets: [expect.objectContaining({ number: 'INC0011994' })] });
-    expect(out.result.say).toMatch(/may be out of date/);
+    expect(out.result.say).toMatch(/may be out of date\. You have one open ticket/);
+  });
+  it('keeps the subset it answered with for the screen', async () => {
+    const out = await list(freshState(), 'resolved');
+    expect(out.state.ticketList).toEqual({ status: 'resolved', period: '', numbers: ['INC0011987'], at: NOW });
+    const v = buildSessionView(out.state, NOW, 1, { tickets: 'simulated', identity: 'simulated', notify: 'simulated', status: 'live' });
+    expect(v.ticketList).toMatchObject({ status: 'resolved', period: '', at: NOW, tickets: [{ number: 'INC0011987', state: 'Resolved', open: false }] });
+    expect(v.tickets).toHaveLength(2);
+    expect(buildSessionView(freshState(), NOW, 1, { tickets: 'simulated', identity: 'simulated', notify: 'simulated', status: 'live' }).ticketList).toBeNull();
+  });
+});
+
+describe('getTicketDetails', () => {
+  const FIGMA = { number: 'INC0011994', sysId: 'sim-INC0011994', summary: 'Figma licence request', state: 'In Progress', urgency: 3 as const, createdAt: null, updatedAt: NOW - DAY };
+  const details = (over: Record<string, unknown> = {}) => vi.fn(async (_n: string) => success({ ...FIGMA, assignee: 'Meera Krishnan', group: 'Software', lastComment: { text: 'Licence approved by the manager, assigning the seat today.', at: NOW - DAY }, resolution: null, ...over }));
+  const ask = (ticket: string, d: ReturnType<typeof vi.fn> = details(), state = freshState()) => call(state, 'getTicketDetails', { ticket }, { tickets: { details: d } });
+  it('says the status, who has it, their team and the last update the employee can see, read live', async () => {
+    const d = details();
+    const out = await ask('I N C 11994', d);
+    expect(d).toHaveBeenCalledWith('INC0011994');
+    expect(out.status).toBe(200);
+    expect(out.result.say).toBe('Your Figma ticket is in progress. Meera from the Software team is on it. The last update, yesterday, says Licence approved by the manager, assigning the seat today.');
+    expect(out.result.data).toMatchObject({ number: 'INC0011994', state: 'In Progress', assignee: 'Meera Krishnan', group: 'Software', lastUpdate: { text: expect.any(String), at: NOW - DAY } });
+  });
+  it('uses their latest open ticket when no number is given', async () => {
+    const d = details();
+    await ask('', d);
+    expect(d).toHaveBeenCalledWith('INC0011994');
+  });
+  it('is honest when nobody has it yet or there is no update', async () => {
+    expect((await ask('11994', details({ assignee: null, group: 'Network', lastComment: null }))).result.say).toBe("Your Figma ticket is in progress. It's with the Network team, not assigned to a person yet. There's no update from IT on it yet.");
+    expect((await ask('11994', details({ assignee: null, group: null, lastComment: null, state: 'New' }))).result.say).toBe("Your Figma ticket is new. It isn't assigned to anyone yet. There's no update from IT on it yet.");
+    expect((await ask('11994', details({ assignee: 'Fred Luddy', group: null, lastComment: null }))).result.say).toMatch(/Fred is on it\./);
+  });
+  it('tells a resolved ticket with who handled it and the resolution', async () => {
+    const out = await ask('11994', details({ state: 'Resolved', lastComment: null, resolution: 'Seat assigned in the Figma admin console.' }));
+    expect(out.result.say).toBe('Your Figma ticket was resolved. Meera from the Software team handled it. The resolution note says Seat assigned in the Figma admin console.');
+    expect(out.state.tickets.find((t) => t.number === 'INC0011994')!.state).toBe('Resolved');
+  });
+  it('only reads the employee\'s own tickets', async () => {
+    const out = await ask('INC0010049', vi.fn(async () => success(null)));
+    expect(out.status).toBe(422);
+    expect(out.result.error).toBe('unknown_ticket');
+    expect(out.result.say).toBe("I can only look up your own tickets, and I can't find I-N-C one zero zero four nine among them.");
+    expect((await ask('', vi.fn(), { ...freshState(), tickets: [] })).result.error).toBe('which_ticket');
+  });
+  it('falls back to what it last saw when ServiceNow does not answer', async () => {
+    const out = await ask('11994', vi.fn(async () => failure({ kind: 'timeout' })));
+    expect(out.status).toBe(422);
+    expect(out.result.say).toMatch(/^I couldn't read it from ServiceNow just now.*Last I saw, your Figma ticket was in progress\.$/);
+  });
+  it('works in simulated mode from the session', async () => {
+    const out = await call(freshState(), 'getTicketDetails', { ticket: '11994' });
+    expect(out.result.say).toBe("Your Figma ticket is in progress. It isn't assigned to anyone yet. There's no update from IT on it yet.");
+    expect((await call(freshState(), 'getTicketDetails', { ticket: '13001' })).result.error).toBe('unknown_ticket');
   });
 });
 

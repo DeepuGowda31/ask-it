@@ -1,4 +1,5 @@
 import type { Ref } from '@/lib/integrations/types';
+import { EMPLOYEE } from './company';
 import { DAY, MINUTE } from './time';
 import type { OpenIncident } from './types';
 
@@ -64,7 +65,7 @@ const ROWS: Row[] = [
   [13001, 'Sales floor VPN down for 40 users', 1, 1, '1', null, null, 'Meera Pillai', null, 180],
   [13002, 'Payroll export failing in SAP', 1, 1, '2', 'Karthik Nair', 'Software', 'Arvind Menon', 'software', DAY / MINUTE],
   [13003, 'Email delivery delayed company-wide', 1, 1, '2', null, 'Service Desk', 'Farhan Qureshi', 'software', 300],
-  [13004, 'Concur expense submissions failing', 1, 2, '2', 'Anita Rao', 'Software', 'Priya Sharma', 'software', (2 * DAY) / MINUTE],
+  [13004, 'Concur expense submissions failing', 1, 2, '2', 'Anita Rao', 'Software', EMPLOYEE.name, 'software', (2 * DAY) / MINUTE],
   [13005, 'Printer on floor 3 keeps jamming', 2, 3, '1', null, 'Field Services', 'Sneha Kulkarni', 'hardware', DAY / MINUTE],
   [13006, 'Laptop battery swelling on NB-1877', 2, 2, '3', 'David Loo', 'Hardware', 'Rahul Iyer', 'hardware', (4 * DAY) / MINUTE, '4'],
   [13007, 'Database backup job running slow', 2, 2, '1', null, 'Database', 'Emma Clarke', 'database', 360],

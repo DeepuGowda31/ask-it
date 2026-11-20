@@ -4,6 +4,7 @@ import { SESSION_MAX_SECONDS, missingEnv, resolvePublicBaseUrl } from '@/lib/age
 import { getStore } from '@/lib/server/store';
 import { SessionNotFoundError, isValidSessionCode, loadSession, normalizeSessionCode, updateSession } from '@/lib/server/session';
 import { answerFollowUp, isRinging, ringId } from '@/lib/domain/followup';
+import { callOpener } from '@/lib/domain/opener';
 import { refreshForCall } from '@/lib/server/sync';
 import type { SessionState } from '@/lib/domain/types';
 import type { AgentResponse, ClientStartRequest } from '@/types/conversation';
@@ -64,16 +65,18 @@ export async function POST(request: NextRequest) {
   // Answering the incoming call: only while that ticket or reminder is still ringing, else an ordinary call.
   const ringing = current.state.followUp;
   const callBack = persona === 'employee' && body.followUp && ringing && ringId(ringing) === body.followUp && isRinging(ringing, now) ? ringing : null;
-  // The greeting and prompt name her tickets and the outage, so they are read again first; her account too.
+  // The greeting and prompt name the employee's tickets and the outage, so they are read again first; the account too.
   const state = persona === 'employee' ? ((await refreshForCall(store, code, now)) ?? current.state) : current.state;
+  // A plain employee call gets one opener from what the session knows now; returned calls and scanned devices already ask.
+  const opener = persona === 'employee' && !callBack && !state.asset ? callOpener(state, now) : null;
 
   try {
-    const session = createAskItSession({ client, channel: body.channel_name, requesterId: body.requester_id, state, baseUrl: base.url, now, persona, callBack });
+    const session = createAskItSession({ client, channel: body.channel_name, requesterId: body.requester_id, state, baseUrl: base.url, now, persona, callBack, opener });
     const agentId = await session.start();
     await updateSession(store, code, (s) => {
       const title = !callBack ? 'Call started' : callBack.reminder ? `Reminder call started: ${callBack.summary}` : `Follow-up call about ${callBack.number} started`;
       const next = addCallEvent(s, now, true, title);
-      next.call = { active: true, agentId, startedAt: now, persona };
+      next.call = { active: true, agentId, startedAt: now, persona, ...(opener ? { opener: opener.say } : {}) };
       if (callBack) answerFollowUp(next, ringId(callBack));
       return { state: next };
     });

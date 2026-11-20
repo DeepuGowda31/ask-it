@@ -19,7 +19,7 @@ const simOutage = (now: number): Outage => ({ id: 'OUT-1', service: 'concur', ti
 
 const simAccount = (now: number): SessionState['account'] => ({
   email: EMPLOYEE.email,
-  userId: 'auth0|sim-priya',
+  userId: 'auth0|sim-deepak',
   // Locked so the unlock story works in simulated mode.
   locked: true,
   lastPasswordReset: now - 83 * DAY,

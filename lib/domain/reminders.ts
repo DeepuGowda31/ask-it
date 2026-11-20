@@ -1,6 +1,6 @@
 import { DAY, MINUTE, formatTime, isoDate, longDate, zonedTime } from './time';
 
-// Reminders: Priya asks ASK IT to check back; when one is due her page rings like a follow-up.
+// Reminders: the employee asks ASK IT to check back; when one is due their page rings like a follow-up.
 
 export const MAX_PENDING_REMINDERS = 5;
 export const MAX_AHEAD_MS = 7 * DAY;

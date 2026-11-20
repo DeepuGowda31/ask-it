@@ -1,10 +1,11 @@
 import type { Mode } from '@/lib/integrations/types';
 import { findAsset } from './assets';
 import { MAX_CODE_ATTEMPTS } from './company';
+import { ACCOUNT_ARTICLE } from './fixes';
 import { findArticle } from './kb';
 import { searchKnowledge } from './search';
 import { outageName } from './services';
-import { isOpen } from './tickets';
+import { LEGACY_FIX_PREFIX, isAskItFix, isOpen } from './tickets';
 import { verificationStatus } from './tools/identity';
 import { ITDESK_TOOLS } from './tools/itdesk';
 import { REPORT_TOOLS } from './tools/report';
@@ -86,15 +87,13 @@ interface IssueSignal {
   at: number;
 }
 
-const RESOLVED_PREFIX = 'Resolved by ASK IT: ';
-const ACCOUNT_ARTICLE = { unlock: 'password', resetPassword: 'password', resetMfa: 'mfa-new-phone' } as const;
 
 const articleTitle = (id: string) => findArticle(id)?.title ?? 'Other';
 
 function ticketSignal(t: TicketRecord, linkedArticle: string | undefined): IssueSignal {
-  const text = t.summary.replace(RESOLVED_PREFIX, '');
+  const text = t.summary.replace(LEGACY_FIX_PREFIX, '');
   const topic = linkedArticle ? articleTitle(linkedArticle) : searchKnowledge(text, 1)[0]?.title ?? 'Other';
-  const status = isOpen(t) ? 'ticket' : t.summary.startsWith(RESOLVED_PREFIX) ? 'fixed' : 'closed';
+  const status = isOpen(t) ? 'ticket' : isAskItFix(t) ? 'fixed' : 'closed';
   return { topic, status, at: t.updatedAt };
 }
 
@@ -124,6 +123,13 @@ const DESK_TOOLS = new Set([...ITDESK_TOOLS, ...REPORT_TOOLS].map((t) => t.name)
 
 const ticketRow = ({ sysId: _sysId, ...t }: TicketRecord, open: boolean) => ({ ...t, open });
 
+function ticketListView(state: SessionState) {
+  const l = state.ticketList;
+  if (!l) return null;
+  const rows = l.numbers.flatMap((n) => state.tickets.filter((t) => t.number === n)).map((t) => ticketRow(t, isOpen(t)));
+  return { status: l.status, period: l.period, at: l.at, tickets: rows };
+}
+
 // Read model for both screens: newest first, nothing secret beyond the simulated inbox.
 export function buildSessionView(state: SessionState, now: number, version: number, integrations: Integrations) {
   // IT desk confirmations have their own read model; the employee screen never shows them.
@@ -144,6 +150,8 @@ export function buildSessionView(state: SessionState, now: number, version: numb
     reminders: (state.reminders ?? []).filter((r) => r.status === 'pending').sort((a, b) => a.at - b.at).map(({ id, at, about, ticket }) => ({ id, at, about, ticket })),
     asset: assetView(state),
     tickets: state.tickets.map((t) => ticketRow(t, isOpen(t))),
+    // The subset the agent's last ticket answer was about, current states, in the same row shape as `tickets`.
+    ticketList: ticketListView(state),
     outages: state.outages,
     pending: pending ? { code: pending.code, kind: pending.payload.kind, summary: pending.summary, warnings: pending.warnings, expiresAt: pending.expiresAt } : null,
     documents: [...state.documents].reverse(),

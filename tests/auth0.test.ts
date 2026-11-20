@@ -8,7 +8,7 @@ const CFG = {
   clientSecret: 'm2m-SECRET',
   otpClientId: 'otp-id',
   otpClientSecret: 'otp-SECRET',
-  email: 'priya.sharma@nimbuslabs.example',
+  email: 'deepak.gowda@nimbuslabs.example',
 };
 const TOKEN = { access_token: 'mgmt-TOKEN-1', expires_in: 86400, token_type: 'Bearer' };
 const USER = {
@@ -86,7 +86,7 @@ describe('Auth0 user', () => {
       value: { userId: 'auth0|priya', email: CFG.email, locked: false, lastPasswordReset: Date.parse(USER.last_password_reset), factors: ['email', 'otp'], factorsKnown: true },
     });
     const lookup = calls[1];
-    expect(lookup.url).toBe('https://nimbus.us.auth0.example/api/v2/users-by-email?email=priya.sharma%40nimbuslabs.example');
+    expect(lookup.url).toBe('https://nimbus.us.auth0.example/api/v2/users-by-email?email=deepak.gowda%40nimbuslabs.example');
     expect(lookup.init.method).toBe('GET');
     expect(headerOf(lookup.init, 'authorization')).toBe('Bearer mgmt-TOKEN-1');
     expect(calls[2].url).toBe('https://nimbus.us.auth0.example/api/v2/user-blocks/auth0%7Cpriya');

@@ -58,9 +58,9 @@ describe('/api/state', () => {
     expect(body.integrations).toEqual({ tickets: 'simulated', identity: 'simulated', notify: 'simulated', status: 'live' });
     expect(body.tickets).toHaveLength(2);
     expect(body.itdesk).toEqual({ queue: [], current: null, lastUpdate: null, pending: null, board: null, updateRequest: null, report: null, stage: { incident: false, board: false } });
-    expect(body.employee.email).toBe('p***@nimbuslabs.example');
-    expect(body.account.email).toBe('p***@nimbuslabs.example');
-    expect(JSON.stringify(body)).not.toMatch(/priya\.sharma@/);
+    expect(body.employee.email).toBe('d***@nimbuslabs.example');
+    expect(body.account.email).toBe('d***@nimbuslabs.example');
+    expect(JSON.stringify(body)).not.toMatch(/deepak\.gowda@/);
     const again = await stateRoute(new NextRequest(`http://localhost/api/state?session=${code}`, { headers: { 'if-none-match': etag } }));
     expect(again.status).toBe(304);
   });
@@ -173,7 +173,7 @@ describe('/api/tools/[name]', () => {
     expect((await first.json()).say).toMatch(/^Done\. Your account is blocked.*I-N-C one two zero zero one\. I'm alerting the IT channel now\./);
     expect((await (await tool('confirmAction', { session_id: code, args: { code: prep.data.confirmationCode } })).json()).data).toMatchObject({ alreadyDone: true });
     await settleDeliveries();
-    expect(posted.map((p) => p.content)).toEqual([expect.stringMatching(/^Security lockdown for Priya Sharma .*P1 incident INC0012001\. All steps done/)]);
+    expect(posted.map((p) => p.content)).toEqual([expect.stringMatching(/^Security lockdown for Deepak Gowda .*P1 incident INC0012001\. All steps done/)]);
     const state = await (await stateRoute(new NextRequest(`http://localhost/api/state?session=${code}`))).json();
     expect(state.account).toMatchObject({ locked: true, factors: [] });
     expect(state.lockdown).toMatchObject({ incident: 'INC0012001', steps: expect.arrayContaining([{ step: 'alert', status: 'ok' }]) });
@@ -309,7 +309,8 @@ describe('/api/invite-agent', () => {
     expect(p.llm.template_variables).toEqual({ session_id: code, persona: 'employee' });
     expect(p.llm.tools).toHaveLength(toolsFor('employee').length);
     expect(p.llm.tools[0].server.url).toMatch(/^https:\/\/askit\.example\.com\/api\/tools\//);
-    expect(p.llm.greeting_message).toMatch(/^Hi Priya, this is ASK IT.*SAP Concur/);
+    expect(p.llm.greeting_message).toBe('Hi Deepak, ASK IT here.');
+    expect(p.llm.system_messages[0].content).toMatch(/Call opener\n- If Deepak stays quiet after your greeting, you add: "What can I help you with today\?"/);
     expect(p.llm.system_messages[0].content).toMatch(/^You are ASK IT/);
     expect(p.llm.failure_message).toBeTruthy();
     expect(p.advanced_features).toMatchObject({ enable_rtm: true, enable_tools: true });
@@ -322,7 +323,7 @@ describe('/api/invite-agent', () => {
     expect(p.filler_words).toBeUndefined();
 
     const state = await (await stateRoute(new NextRequest(`http://localhost/api/state?session=${code}`))).json();
-    expect(state.call).toMatchObject({ active: true, agentId: 'agent-abc' });
+    expect(state.call).toMatchObject({ active: true, agentId: 'agent-abc', opener: 'What can I help you with today?' });
   });
   it('starts the IT desk persona with its own prompt, tools and template variable', async () => {
     const { bodies } = mockAgora();
@@ -342,8 +343,9 @@ describe('/api/invite-agent', () => {
     const code = ((await (await createSessionRoute(json('http://localhost/api/session', { asset: 'room-4b-display' }))).json()) as { code: string }).code;
     expect((await invite(code)).status).toBe(200);
     const p = (bodies[0] as { properties: Record<string, any> }).properties; // eslint-disable-line @typescript-eslint/no-explicit-any
-    expect(p.llm.greeting_message).toBe("Hi Priya, this is ASK IT. You're at meeting room 4B's display. What's going wrong?");
-    expect(p.llm.system_messages[0].content).toMatch(/This call\n- Priya scanned the QR sticker on Meeting room 4B display/);
+    expect(p.llm.greeting_message).toBe("Hi Deepak, this is ASK IT. You're at meeting room 4B's display. What's going wrong?");
+    expect(p.llm.system_messages[0].content).toMatch(/This call\n- Deepak scanned the QR sticker on Meeting room 4B display/);
+    expect(p.llm.system_messages[0].content).not.toMatch(/Call opener/);
   });
   it('refuses an unknown persona', async () => {
     mockAgora();
@@ -420,12 +422,31 @@ describe('/api/intro', () => {
     expect(await (await intro(code)).json()).toMatchObject({ state: 'already' });
     expect(calls.filter((c) => c.url.includes('/speak'))).toHaveLength(1);
   });
-  it('does nothing without a live IT desk call', async () => {
+  it('does nothing without a live call', async () => {
     const calls = agora();
     const code = await newSession();
     expect((await intro(code)).status).toBe(409);
+    expect(calls.some((c) => c.url.includes('/speak'))).toBe(false);
+  });
+  it('has the employee agent say the opener chosen at call start, once, only while nothing else is being said', async () => {
+    const calls = agora();
+    const code = await newSession();
     await inviteRoute(json('http://localhost/api/invite-agent', { requester_id: '1', channel_name: 'c', session: code }));
-    expect((await intro(code)).status).toBe(409);
+    const res = await intro(code);
+    expect(res.status).toBe(200);
+    const speak = calls.filter((c) => c.url.includes('/agents/agent-it/speak'));
+    expect(speak).toHaveLength(1);
+    expect(speak[0].body).toMatchObject({ text: 'What can I help you with today?', priority: 'IGNORE', interruptable: true });
+    expect(await (await intro(code)).json()).toMatchObject({ state: 'already' });
+    expect(calls.filter((c) => c.url.includes('/speak'))).toHaveLength(1);
+  });
+  it('has no opener for a scanned device call, whose greeting already asks', async () => {
+    const calls = agora();
+    const code = ((await (await createSessionRoute(json('http://localhost/api/session', { asset: 'printer-3f' }))).json()) as { code: string }).code;
+    await inviteRoute(json('http://localhost/api/invite-agent', { requester_id: '1', channel_name: 'c', session: code }));
+    const res = await intro(code);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ error: 'no_intro' });
     expect(calls.some((c) => c.url.includes('/speak'))).toBe(false);
   });
   it('rejects bad input and unknown sessions', async () => {

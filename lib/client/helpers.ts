@@ -87,7 +87,7 @@ export function alertProblem(alerts: { status: 'queued' | 'sent' | 'failed'; err
   return { error: alerts[0].error ?? 'Slack did not accept the alert.', failed: run < 0 ? alerts.length : run };
 }
 
-// The IT desk intro is due when only the greeting has been said and the agent is waiting for the engineer.
+// The intro is due when only the greeting has been said and the agent is waiting for the caller.
 export function introDue<T extends { role: 'agent' | 'user'; streaming: boolean }>(transcript: T[], signal: string): boolean {
   return transcript.length === 1 && transcript[0].role === 'agent' && !transcript[0].streaming && signal === 'listening';
 }

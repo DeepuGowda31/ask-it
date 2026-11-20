@@ -1,13 +1,12 @@
 import type { Mode } from '@/lib/integrations/types';
 import { addDocument, queueAlert } from '../actions';
+import { ACTION_LABEL, applyFixes, claimFixes, fixesEffect, type FixesEffect } from '../fixes';
 import { deviceLabel } from '../company';
 import { isOpen } from '../tickets';
 import { formatTime, isoDate, longDate } from '../time';
 import type { SessionState } from '../types';
 import { isVerified } from './identity';
 import { ok, plural, tool } from './shared';
-
-const ACTION_LABEL = { unlock: 'account unlocked', resetPassword: 'password reset link sent', resetMfa: 'MFA reset' };
 
 // A lockdown counts as done only for the steps that went through.
 function lockdownLabel(state: SessionState) {
@@ -99,21 +98,28 @@ function spokenSummary(state: SessionState): string {
   return parts.length ? parts.join(', ') : 'nothing changed in this call';
 }
 
+const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 const postSay = (mode: Mode) =>
   mode === 'live' ? "I'm posting the summary to the IT channel now." : 'The summary is on your screen; posting to the IT channel is simulated because no webhook is set up.';
 
-const wrapUpCall = tool<Mode>({
+const wrapUpCall = tool<{ notifyMode: Mode; fixes: FixesEffect }>({
   name: 'wrapUpCall',
-  description: 'End-of-call summary from what actually happened: issues resolved, tickets raised or escalated, outages followed, account actions and next steps. Posts it to the IT channel and shows it as a document.',
+  description: 'End-of-call summary from what actually happened: issues resolved, tickets raised or escalated, outages followed, account actions and next steps. Logs an account fix not logged yet as resolved, posts the summary to the IT channel and shows it as a document.',
   params: {},
   minutesSaved: 3,
-  async effect({ deps }) {
-    return deps.notifyMode;
+  // An account fix markResolved never logged, and a record ServiceNow did not take, are logged first.
+  begin(state, _args, now, claim) {
+    return claimFixes(state, claim, now);
   },
-  run({ state, now, effect }) {
+  async effect({ state, now, deps, claim }) {
+    return { notifyMode: deps.notifyMode, fixes: await fixesEffect(state, deps, claim, now) };
+  },
+  run({ state, now, effect, claim }) {
+    if (effect) applyFixes(state, effect.fixes, claim, now);
     const alert = queueAlert(state, now, 'callSummary', summaryText(state));
     addDocument(state, now, { kind: 'callSummary', title: `Call summary · ${formatTime(now)}`, markdown: summaryMarkdown(state, now) });
-    return { title: 'Call summary ready', alerts: [alert], result: ok(`Here's the wrap-up: ${spokenSummary(state)}. ${postSay(effect ?? 'simulated')}`, { posting: true }) };
+    return { title: 'Call summary ready', alerts: [alert], result: ok(`Here's the wrap-up. ${capital(spokenSummary(state))}. ${postSay(effect?.notifyMode ?? 'simulated')}`, { posting: true }) };
   },
 });
 

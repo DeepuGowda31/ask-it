@@ -4,7 +4,7 @@ import { nextSimNumber } from '@/lib/domain/tickets';
 import { matchesQuery, sortIncidents } from '@/lib/domain/queue-query';
 import type { OpenIncident, SessionState } from '@/lib/domain/types';
 import { failure, success } from './http';
-import type { DeskAdapter, DeskIncident, IdentityAdapter, Level, NameMatch, OpenTicket, QueueQuery, RemoteTicket, Resource, TicketAdapter, TicketRef } from './types';
+import type { DeskAdapter, DeskIncident, IdentityAdapter, Level, NameMatch, OpenTicket, QueueQuery, RemoteTicket, Resource, TicketAdapter, TicketDetails, TicketRef } from './types';
 
 // Someone already reported the 3rd floor printer, so a scan there shows the duplicate path.
 const OPEN_FOR_ASSET: Record<string, OpenTicket> = {
@@ -44,10 +44,6 @@ export class SimulatedTickets implements TicketAdapter {
     return success(visit?.id === assetId && visit.ticket ? visit.ticket : (OPEN_FOR_ASSET[assetId] ?? null));
   }
 
-  resolve(ref: TicketRef) {
-    return this.touch(ref);
-  }
-
   addNote(ref: TicketRef) {
     return this.touch(ref);
   }
@@ -62,6 +58,14 @@ export class SimulatedTickets implements TicketAdapter {
 
   reopen(ref: TicketRef) {
     return this.touch(ref);
+  }
+
+  // The employee's own tickets only; who has one comes from the simulated desk when it is there.
+  async details(number: string) {
+    const t = this.state.tickets.find((x) => x.number === number && x.source === 'simulated' && x.sysId);
+    if (!t?.sysId) return success<TicketDetails | null>(null);
+    const row = this.state.itdesk.backlog.find((i) => i.number === number);
+    return success<TicketDetails | null>({ number: t.number, sysId: t.sysId, summary: t.summary, state: t.state, urgency: t.urgency, createdAt: t.createdAt, updatedAt: t.updatedAt, assignee: row?.assignee?.name ?? null, group: row?.group?.name ?? null, lastComment: null, resolution: null });
   }
 
   async listMine() {
@@ -80,7 +84,7 @@ export class SimulatedIdentity implements IdentityAdapter {
 
   async getUser() {
     const a = this.state.account;
-    return success({ userId: a.userId ?? 'auth0|sim-priya', email: a.email, locked: a.locked === true, lastPasswordReset: a.lastPasswordReset, factors: a.factors, factorsKnown: a.factorsKnown });
+    return success({ userId: a.userId ?? 'auth0|sim-deepak', email: a.email, locked: a.locked === true, lastPasswordReset: a.lastPasswordReset, factors: a.factors, factorsKnown: a.factorsKnown });
   }
 
   async sendCode() {

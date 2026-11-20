@@ -79,6 +79,12 @@ export interface TicketRecord {
   syncFailed?: boolean;
   escalated?: boolean;
   raisedHere?: boolean;
+  // When a ServiceNow list showed its state change.
+  changedAt?: number;
+  // When ServiceNow says it was resolved, when it says.
+  resolvedAt?: number;
+  // Logged by ASK IT for a fix made with the employee on a call.
+  fixedOnCall?: true;
 }
 
 export interface Outage {
@@ -103,7 +109,8 @@ export type ActionPayload =
   // `text` is what ServiceNow gets; `shared` marks the open ticket of a scanned device, which is not hers.
   | { kind: 'note'; number: string; sysId: string; text: string; shared: boolean }
   | { kind: 'outage'; incident: string }
-  | { kind: 'resolution'; key: string; summary: string; ticket: Omit<NewTicket, 'correlationId'> };
+  // `account` is when the account fix it also covers started.
+  | { kind: 'resolution'; key: string; summary: string; ticket: Omit<NewTicket, 'correlationId'>; account?: number };
 
 export interface PendingAction {
   code: string;
@@ -151,7 +158,26 @@ interface Resolution {
   number: string;
 }
 
-// A ticket IT resolved outside ASK IT, or a due reminder; the employee page rings until she answers or snoozes it.
+// Account actions that worked on this call; logged once as a resolved incident by markResolved, wrap up or the end of the call.
+export interface AccountFix {
+  actions: AccountAction[];
+  at: number;
+  status: 'open' | 'logging' | 'logged';
+  claim?: string;
+  claimedAt?: number;
+  // The record it was logged as.
+  number?: string;
+}
+
+// A fix record ServiceNow did not take, kept as a local ticket; wrap up or the end of the call tries it once more.
+interface UnsyncedFix {
+  localRef: string;
+  ticket: NewTicket;
+  claim?: string;
+  claimedAt?: number;
+}
+
+// A ticket IT resolved outside ASK IT, or a due reminder; the employee page rings until it is answered or snoozed.
 export interface FollowUp {
   // For a reminder: its ticket, or "" when it has none.
   number: string;
@@ -160,11 +186,11 @@ export interface FollowUp {
   resolvedAt: number;
   status: 'ringing' | 'snoozed' | 'answered';
   snoozedUntil?: number;
-  // Set when this ring is a reminder she asked for.
+  // Set when this ring is a reminder the employee asked for.
   reminder?: string;
 }
 
-// A check-back Priya asked for; it rings her page once when due.
+// A check-back the employee asked for; it rings their page once when due.
 export interface Reminder {
   id: string;
   at: number;
@@ -313,8 +339,10 @@ interface CallState {
   startedAt?: number;
   endedAt?: number;
   endReason?: string;
-  // When the IT desk intro was sent; it is said at most once per call.
+  // When the intro was sent; it is said at most once per call.
   introAt?: number;
+  // An employee call's opener, chosen when the call started.
+  opener?: string;
 }
 
 export interface SessionState {
@@ -338,6 +366,11 @@ export interface SessionState {
   asset?: AssetVisit | null;
   // Missing in sessions saved before reminders existed.
   reminders?: Reminder[];
+  // Missing in sessions saved before fixes on the call were logged.
+  accountFix?: AccountFix | null;
+  unsyncedFix?: UnsyncedFix | null;
+  // The tickets listMyTickets last answered with, for the screen. Missing in older sessions.
+  ticketList?: { status: 'open' | 'resolved' | 'all'; period: string; numbers: string[]; at: number } | null;
   itdesk: ItDesk;
   tickets: TicketRecord[];
   outages: Outage[];

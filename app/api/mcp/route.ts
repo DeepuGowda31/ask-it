@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTool, parsePersona, toolJsonSchema, toolsFor } from '@/lib/domain/tools';
+import { COMPANY, EMPLOYEE } from '@/lib/domain/company';
 import type { Persona } from '@/lib/domain/types';
 import { TOOL_SECRET_HEADER, isAuthorizedToolCall } from '@/lib/server/auth';
 import { executeTool } from '@/lib/server/execute';
@@ -24,7 +25,7 @@ async function handle(msg: RpcRequest, session: string, persona: Persona) {
         protocolVersion: PROTOCOL_VERSION,
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: 'ask-it', version: '1.0.0' },
-        instructions: 'ASK IT helpdesk tools for Priya Sharma at Nimbus Labs: service status and outages, guided fixes from the knowledge base, identity verification by email code, account unlock and resets, and ServiceNow tickets. Committing actions return a confirmation code for confirmAction.',
+        instructions: `ASK IT helpdesk tools for ${EMPLOYEE.name} at ${COMPANY}: service status and outages, guided fixes from the knowledge base, identity verification by email code, account unlock and resets, and ServiceNow tickets. Committing actions return a confirmation code for confirmAction.`,
       });
     case 'ping':
       return rpcResult(msg.id, {});

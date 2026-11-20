@@ -1,5 +1,5 @@
 import { applyAccountRead, applyDeskRead, applyOutageRead } from '@/lib/domain/sync';
-import { readBoard } from '@/lib/domain/tools/itdesk';
+import { boardReadOk, readBoard } from '@/lib/domain/tools/itdesk';
 import type { SessionState } from '@/lib/domain/types';
 import type { Result } from '@/lib/integrations/http';
 import type { AccountInfo, DeskAdapter, DeskIncident } from '@/lib/integrations/types';
@@ -39,7 +39,7 @@ async function within<T>(read: () => Promise<T>, ms: number): Promise<T | null> 
   }
 }
 
-// Reads her Auth0 account and the outage's ServiceNow incident in parallel, waiting at most 2.5 s.
+// Reads the employee's Auth0 account and the outage's ServiceNow incident in parallel, waiting at most 2.5 s.
 // What fails keeps what the session knew; nothing is invented.
 export async function syncLive(store: VersionedStore, code: string, now: number, sources: (state: SessionState) => LiveSources = (s) => liveSources(s, now)): Promise<SessionState | null> {
   const hit = await loadSession(store, code);
@@ -59,7 +59,7 @@ export async function syncLive(store: VersionedStore, code: string, now: number,
   }
 }
 
-// Before an employee call: her tickets, account and outage, read in parallel.
+// Before an employee call: their tickets, account and outage, read in parallel.
 export async function refreshForCall(store: VersionedStore, code: string, now: number): Promise<SessionState | null> {
   await Promise.all([refreshTickets(store, code, now), syncLive(store, code, now)]);
   return (await loadSession(store, code))?.state ?? null;
@@ -70,14 +70,14 @@ const deskSyncKey = (code: string) => `askit:desksync:${code}`;
 
 type DeskSync = 'synced' | 'idle' | 'simulated' | 'throttled' | 'unavailable';
 
-// The IT page's open incident and its list, count or dashboard, read again from ServiceNow so edits made there show up.
+// The IT page's open incident and its board (list, count, dashboard or people), read again from ServiceNow so edits made there show up.
 // At most one read per session every 10 s, waiting at most 4 s; what fails keeps what is on screen.
 export async function syncDesk(store: VersionedStore, code: string, now: number, makeDesk: (state: SessionState) => DeskAdapter = (s) => buildDeps(s, now).desk): Promise<{ state: SessionState; outcome: DeskSync } | null> {
   const hit = await loadSession(store, code);
   if (!hit) return null;
   const base = hit.state.itdesk;
   const current = base.current;
-  const board = base.board && ['list', 'count', 'dashboard'].includes(base.board.kind) ? base.board : null;
+  const board = base.board && ['list', 'count', 'dashboard', 'people', 'person'].includes(base.board.kind) ? base.board : null;
   if (!current && !board) return { state: hit.state, outcome: 'idle' };
   const desk = makeDesk(hit.state);
   if (desk.mode !== 'live') return { state: hit.state, outcome: 'simulated' };
@@ -87,7 +87,7 @@ export async function syncDesk(store: VersionedStore, code: string, now: number,
     current ? within(() => desk.workNotes(current.sysId), DESK_TIMEOUT_MS) : null,
     board ? within(() => readBoard(desk, board, now), DESK_TIMEOUT_MS) : null,
   ]);
-  if (!found?.ok && !boardRead?.rows.ok) return { state: hit.state, outcome: 'unavailable' };
+  if (!found?.ok && !boardReadOk(boardRead)) return { state: hit.state, outcome: 'unavailable' };
   try {
     const read = { ...(current ? { incident: { number: current.number, found, notes } } : {}), board: boardRead };
     const { state } = await updateSession(store, code, (s) => ({ state: applyDeskRead(s, base, read, now) }));

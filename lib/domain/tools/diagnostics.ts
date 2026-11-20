@@ -1,4 +1,5 @@
 import { nextId } from '../actions';
+import { EMPLOYEE } from '../company';
 import { FOCUSES, diagnose, type DiagnosticFocus, type DiagnosticResults, type Finding } from '../diagnose';
 import { findArticle } from '../kb';
 import type { Diagnostics, SessionState } from '../types';
@@ -15,7 +16,7 @@ const FOCUS_GUIDE: Record<DiagnosticFocus, string> = { calls: 'meeting-audio', a
 
 const inFlight = (d: Diagnostics | null | undefined, now: number) => d?.status === 'requested' && now - d.requestedAt < STALE_MS;
 const guideTitle = (id: string) => findArticle(id)?.title ?? id;
-const startGuide = (id: string) => `If she agrees, call startTroubleshooting with articleId ${id}.`;
+const startGuide = (id: string) => `If they agree, call startTroubleshooting with articleId ${id}.`;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 type RecordOutcome = 'accepted' | 'duplicate' | 'unknown' | 'expired';
@@ -51,7 +52,7 @@ function spoken(focus: DiagnosticFocus, findings: Finding[]): Outcome {
 const runDiagnostics = tool<string>({
   name: 'runDiagnostics',
   description:
-    'Run live checks on the laptop Priya is calling from, in her browser: call packet loss, round trip and jitter, whether Slack, GitHub, Google and Microsoft sign-in answer, microphone, speakers, camera permission, clock and battery. Use it first for network, call quality, audio, slowness or sign-in problems. Takes a few seconds.',
+    `Run live checks on the laptop ${EMPLOYEE.firstName} is calling from, in the browser: call packet loss, round trip and jitter, whether Slack, GitHub, Google and Microsoft sign-in answer, microphone, speakers, camera permission, clock and battery. Use it first for network, call quality, audio, slowness or sign-in problems. Takes a few seconds.`,
   params: { focus: { description: 'calls for call quality, network, audio, signin, or general for slowness and anything else', enum: FOCUSES } },
   minutesSaved: 3,
   // Records the request before the wait, so the browser sees it; a call while one runs joins it.

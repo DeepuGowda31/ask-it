@@ -40,6 +40,18 @@ export function displayTicketNumbers(text: string): string {
   return out + text.slice(at);
 }
 
+// Every ticket number a message mentions, written or spoken.
+export function mentionedTickets(text: string): Set<string> {
+  return new Set(mentions(text).map((m) => m.number));
+}
+
+// The agent turn that reads out a ticket list made at `at`: the first agent turn after it, and only when the list was made during this call.
+export function listTurnId(messages: { id: string; role: 'agent' | 'user'; createdAt?: number }[], at: number): string | null {
+  const start = messages[0]?.createdAt;
+  if (start === undefined || at < start) return null;
+  return messages.find((m) => m.role === 'agent' && m.createdAt !== undefined && m.createdAt >= at)?.id ?? null;
+}
+
 const trimTail = (s: string) => s.replace(ORDINAL, '').replace(/[\s,;:.-]+$/, '');
 const trimHead = (s: string) => s.replace(/^[\s,;:.-]+/, '').replace(/^(?:for the|for)\s+/i, '');
 

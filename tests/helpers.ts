@@ -63,7 +63,7 @@ export async function confirmed(state: SessionState, name: string, args: Record<
 }
 
 // Text the employee hears: never tool names, brackets or status codes.
-const TOOL_NAME = /\b(listQueue|requestUpdate|countIncidents|showDashboard|showImpact|openIncident|prepareIncidentUpdate|checkServiceStatus|followOutage|searchKnowledge|startTroubleshooting|reportStep|markResolved|verifyIdentity|checkIdentity|getAccountStatus|prepareAccountAction|prepareSecurityLockdown|prepareTicket|listMyTickets|addTicketNote|prepareEscalation|confirmAction|cancelAction|wrapUpCall|confirmFix|runDiagnostics|listResources|showResource|scheduleReminder|generateReport)\b/;
+const TOOL_NAME = /\b(listQueue|requestUpdate|countIncidents|showDashboard|showImpact|openIncident|prepareIncidentUpdate|checkServiceStatus|followOutage|searchKnowledge|startTroubleshooting|reportStep|markResolved|verifyIdentity|checkIdentity|getAccountStatus|prepareAccountAction|prepareSecurityLockdown|prepareTicket|listMyTickets|getTicketDetails|addTicketNote|prepareEscalation|confirmAction|cancelAction|wrapUpCall|confirmFix|runDiagnostics|listResources|showResource|scheduleReminder|generateReport)\b/;
 function speakable(say: string) {
   return !TOOL_NAME.test(say) && !/[()[\]{}]|HTTP|\b[45]\d\d\b/.test(say);
 }

@@ -1,5 +1,6 @@
 import { Agent, AgoraClient, Area, DeepgramSTT, ExpiresIn, MurfTTS, OpenAI, generateConvoAIToken } from 'agora-agents';
 import { DEFAULT_AGENT_UID } from '@/lib/agora';
+import type { Opener } from '@/lib/domain/opener';
 import type { FollowUp, Persona, SessionState } from '@/lib/domain/types';
 import { FAILURE_MESSAGE, buildAgoraTools, buildGreeting, buildSystemPrompt, interruptionSettings, murfConfig } from './config';
 
@@ -31,11 +32,13 @@ export function createAskItSession(opts: {
   persona: Persona;
   // The ticket a follow-up call is about, or the reminder being returned.
   callBack?: FollowUp | null;
+  // What an employee call adds when the caller stays quiet after the greeting.
+  opener?: Opener | null;
   env?: Env;
 }) {
   const env = opts.env ?? process.env;
   const llmCommon = {
-    systemMessages: [{ role: 'system', content: buildSystemPrompt(opts.now, opts.persona, opts.callBack, opts.state.asset, opts.state.tickets) }],
+    systemMessages: [{ role: 'system', content: buildSystemPrompt(opts.now, opts.persona, opts.callBack, opts.state.asset, opts.state.tickets, opts.opener) }],
     greetingMessage: buildGreeting(opts.state, opts.persona, opts.callBack),
     failureMessage: FAILURE_MESSAGE,
     maxHistory: 32,

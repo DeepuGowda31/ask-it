@@ -163,7 +163,7 @@ describe('account actions', () => {
     expect(prep.result.next).toMatch(/confirmAction/);
     const done = await call(prep.state, 'confirmAction', { code: codeOf(prep.result) }, { identity: { lifecycle } });
     expect(done.status).toBe(200);
-    expect(lifecycle).toHaveBeenCalledWith({ userId: 'auth0|sim-priya', email: 'priya.sharma@nimbuslabs.example' }, 'unlock');
+    expect(lifecycle).toHaveBeenCalledWith({ userId: 'auth0|sim-deepak', email: 'deepak.gowda@nimbuslabs.example' }, 'unlock');
     expect(done.state.account.locked).toBe(false);
     expect(done.state.metrics.accountActions).toBe(1);
     expect(done.result.say).toMatch(/unlocked/);

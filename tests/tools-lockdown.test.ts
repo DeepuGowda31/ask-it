@@ -10,7 +10,7 @@ import { fakeFetch, jsonResponse } from './fakes';
 const WHAT = { what: 'laptop left in an Uber', when: 'about an hour ago' };
 const UNAVAILABLE: Failure = { kind: 'unavailable', status: 503 };
 
-// Priya with an active, unlocked account and an authenticator enrolled.
+// Deepak with an active, unlocked account and an authenticator enrolled.
 function unlocked() {
   const s = freshState();
   s.account.locked = false;
@@ -77,8 +77,8 @@ describe('confirmAction on a lockdown', () => {
     const out = await call(state, 'confirmAction', { code }, r);
     expect(out.status).toBe(200);
     expect(r.log).toEqual(['block', 'endSessions', 'revokeRefreshTokens', 'lifecycle', 'create']);
-    expect(r.identity.block).toHaveBeenCalledWith('auth0|sim-priya');
-    expect(r.identity.lifecycle).toHaveBeenCalledWith({ userId: 'auth0|sim-priya', email: 'priya.sharma@nimbuslabs.example' }, 'resetMfa');
+    expect(r.identity.block).toHaveBeenCalledWith('auth0|sim-deepak');
+    expect(r.identity.lifecycle).toHaveBeenCalledWith({ userId: 'auth0|sim-deepak', email: 'deepak.gowda@nimbuslabs.example' }, 'resetMfa');
     expect(r.tickets.create).toHaveBeenCalledWith(expect.objectContaining({ urgency: 1, impact: 1, category: 'hardware', correlationId: `askit:NMB-7K2:${code}`, shortDescription: 'Lost or stolen device: laptop left in an Uber' }));
     expect(out.state.account).toMatchObject({ locked: true, factors: [] });
     expect(out.state.lockdown).toMatchObject({ at: NOW, incident: 'INC0012001', steps: ['block', 'sessions', 'refreshTokens', 'mfa', 'incident'].map((step) => ({ step, ok: true })) });
@@ -94,7 +94,7 @@ describe('confirmAction on a lockdown', () => {
     const out = await call(state, 'confirmAction', { code }, { ...recorder(), notifyMode: 'live' });
     expect(out.alerts).toHaveLength(1);
     expect(out.alerts[0].card).toMatchObject({ status: 'escalated', ticket: 'INC0012001', alias: 'INC0012001', title: 'Lost or stolen device: laptop left in an Uber' });
-    expect(out.alerts[0].text).toMatch(/^Security lockdown for Priya Sharma .*: laptop left in an Uber\. P1 incident INC0012001\. All steps done/);
+    expect(out.alerts[0].text).toMatch(/^Security lockdown for Deepak Gowda .*: laptop left in an Uber\. P1 incident INC0012001\. All steps done/);
     expect(out.state.lockdown?.alertId).toBe(out.alerts[0].id);
     expect(out.result.say).toMatch(/alerting the IT channel now/);
   });
@@ -265,7 +265,7 @@ describe('wrapUpCall after a lockdown', () => {
     const all = { block: UNAVAILABLE, endSessions: UNAVAILABLE, revokeRefreshTokens: UNAVAILABLE, lifecycle: UNAVAILABLE, create: UNAVAILABLE };
     const failedAll = await call(state, 'confirmAction', { code }, recorder(all));
     const none = await call(failedAll.state, 'wrapUpCall');
-    expect(none.result.say).toMatch(/security lockdown failed/);
+    expect(none.result.say).toMatch(/Security lockdown failed/);
     expect(none.state.documents[0].markdown).toMatch(/- security lockdown failed/);
     const partly = await call(state, 'confirmAction', { code }, recorder({ endSessions: UNAVAILABLE }));
     expect((await call(partly.state, 'wrapUpCall')).result.say).toMatch(/security lockdown, partly done/);

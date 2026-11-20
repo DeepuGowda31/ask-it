@@ -5,10 +5,10 @@ import type { Employee } from './types';
 export const COMPANY = 'Nimbus Labs';
 
 export const EMPLOYEE: Employee = {
-  name: 'Priya Sharma',
-  firstName: 'Priya',
+  name: 'Deepak Gowda',
+  firstName: 'Deepak',
   role: 'Product Manager',
-  email: 'priya.sharma@nimbuslabs.example',
+  email: 'deepak.gowda@nimbuslabs.example',
   device: { id: 'NB-2231', model: 'MacBook Pro', os: 'macOS 15' },
   vpnClient: 'GlobalProtect',
 };

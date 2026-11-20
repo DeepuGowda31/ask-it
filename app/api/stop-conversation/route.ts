@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { agoraClient, isAgentAlreadyStoppingOrStopped } from '@/lib/agent/agent';
+import { deferDelivery } from '@/lib/server/deliveries';
+import { logCallFixes } from '@/lib/server/fixes';
 import { getStore } from '@/lib/server/store';
 import { isValidSessionCode, normalizeSessionCode, updateSession } from '@/lib/server/session';
 import type { StopConversationRequest } from '@/types/conversation';
@@ -51,6 +53,8 @@ export async function POST(request: NextRequest) {
       next.call = { ...next.call, active: false, endedAt: now, endReason: reason };
       return { state: next };
     }).catch(() => {});
+    // A fix made on the call still gets its resolved record, after the response.
+    deferDelivery(() => logCallFixes(getStore(), code, now));
   }
   return NextResponse.json({ success: true, state });
 }

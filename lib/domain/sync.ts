@@ -7,7 +7,7 @@ import type { Outage, SessionState } from './types';
 
 // Pure reducers for what the live systems said; `read` is null when they did not answer in time. Unchanged input returns the same state.
 
-// Her account as Auth0 reads it. A failed read keeps the last real one, or marks a never-read account unreadable.
+// The employee's account as Auth0 reads it. A failed read keeps the last real one, or marks a never-read account unreadable.
 export function applyAccountRead(state: SessionState, read: Result<AccountInfo> | null, now: number): SessionState {
   if (read?.ok) return { ...state, account: { ...read.value, source: 'live', checkedAt: now } };
   if (state.account.locked !== null || state.account.readFailed) return state;
@@ -17,7 +17,7 @@ export function applyAccountRead(state: SessionState, read: Result<AccountInfo> 
 const OPEN = new Set(['1', '2', '3']);
 
 // The outage as its ServiceNow master incident says: title, start and service from its text, no affected count.
-// A closed or missing incident ends it unless she follows it; a failed read keeps what was known.
+// A closed or missing incident ends it unless the employee follows it; a failed read keeps what was known.
 export function applyOutageRead(state: SessionState, number: string, read: Result<DeskIncident | null> | null): SessionState {
   if (!read?.ok) return state;
   const known = state.outages.find((o) => o.incident === number);
