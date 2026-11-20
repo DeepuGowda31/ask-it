@@ -15,7 +15,7 @@ import { AgoraVoiceAI, AgoraVoiceAIEvents, TranscriptHelperMode } from 'agora-ag
 import type { RTMClient } from 'agora-rtm';
 import { DEFAULT_AGENT_UID } from '@/lib/agora';
 import { toMessages, type TranscriptMessage } from '@/lib/conversation';
-import { describeMicError } from '@/lib/client/helpers';
+import { describeMicError, textLink } from '@/lib/client/helpers';
 import { MIC_TRACK_CONFIG } from '@/lib/client/audio';
 import type { AudioLevelSource } from '@/lib/client/signal';
 import type { CallProbe } from '@/lib/client/diagnostics';
@@ -34,6 +34,8 @@ export interface CallCallbacks {
   onAudioBlocked: (resume: (() => void) | null) => void;
   /** Live call stats for the laptop check; null once the call is gone. */
   onProbe: (probe: CallProbe | null) => void;
+  /** The live text dropped (true) or came back (false); the voice is separate and carries on. */
+  onTextLink: (paused: boolean) => void;
 }
 
 export interface AgentEvent {
@@ -106,6 +108,21 @@ export default function CallSession({
       /* optional SDK parameter */
     }
   }, []);
+
+  // The live text rides on RTM, apart from the voice: show a drop, sign in again if it failed, pick the channel up again once back.
+  useEffect(() => {
+    let dropped = false;
+    const onStatus = (e: { state?: string }) => {
+      if (!e.state) return;
+      const next = textLink(dropped, e.state);
+      if (next.dropped !== dropped) cb.current.onTextLink(next.dropped);
+      dropped = next.dropped;
+      if (next.action === 'resubscribe') rtmClient.subscribe(agoraData.channel).catch(() => {});
+      if (next.action === 'relogin') rtmClient.login({ token: agoraData.token }).then(() => rtmClient.subscribe(agoraData.channel)).catch(() => {});
+    };
+    rtmClient.addEventListener('status', onStatus);
+    return () => rtmClient.removeEventListener('status', onStatus);
+  }, [rtmClient, agoraData.channel, agoraData.token]);
 
   // Transcript + agent state via RTM, initialised once after join.
   useEffect(() => {

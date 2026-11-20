@@ -6,7 +6,7 @@ import { Brand, BrandMark } from './Brand';
 import { Drawer } from './Drawer';
 import { DocumentView } from './DocumentView';
 import { Transcript } from './Transcript';
-import { AccountCard, DocumentList, MyTickets, RightNowCard, urgencyLabel } from './SideCards';
+import { AccountCard, AskedTickets, DocumentList, MyTickets, RightNowCard, urgencyLabel } from './SideCards';
 import { CallBanners, CallDock, CallMount, CallSignal } from './VoiceCall';
 import { Faq } from './Faq';
 import { IncomingCall } from './IncomingCall';
@@ -21,7 +21,7 @@ import { ringId } from '@/lib/domain/followup';
 import { findAsset } from '@/lib/domain/assets';
 import { downloadText, timeOfDay } from '@/lib/client/format';
 import { useCallIntro } from '@/lib/client/useCallIntro';
-import { listTurnId } from '@/lib/client/ticket-lines';
+import { rightNow } from '@/lib/client/right-now';
 
 const SESSION_KEY = 'askit.session';
 const CODE_RE = /^[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}$/;
@@ -119,12 +119,9 @@ export default function EmployeeApp({ setupWarning }: { setupWarning: string | n
   // A follow-up or reminder rings only while no call is connecting or live on this session, here or on another screen.
   const { ringing, snooze } = useFollowUp(code, view?.followUp ?? null, (phase === 'idle' || phase === 'ended') && !!view && !view.call.active, now);
   const catalog = useMemo(() => (view ? ticketCatalog(view) : undefined), [view]);
-  // The tickets asked for in this call, under the ASK IT turn that answered.
-  const attached = useMemo(() => {
-    const list = view?.ticketList;
-    const id = list ? listTurnId(transcript, list.at, view.call.startedAt ?? null) : null;
-    return list && id ? { id, rows: list.tickets } : null;
-  }, [view, transcript]);
+  // The stage shows what needs the employee now, or the tickets they asked for on this call; otherwise the welcome.
+  const stageNow = Boolean(inCall && view && rightNow(view, now));
+  const askedList = inCall && view?.ticketList && view.call.startedAt && view.ticketList.at >= view.call.startedAt ? view.ticketList : null;
   const asset = view?.asset ?? null;
 
   const header = (
@@ -216,7 +213,6 @@ export default function EmployeeApp({ setupWarning }: { setupWarning: string | n
                 <CallBanners call={call} />
                 <Transcript
                   catalog={catalog}
-                  attached={attached}
                   messages={transcript}
                   placeholder={phase === 'connecting' ? 'Connecting you to ASK IT…' : phase === 'ended' ? 'No conversation was recorded.' : "Say hello, then tell IT what's wrong."}
                 />
@@ -236,14 +232,17 @@ export default function EmployeeApp({ setupWarning }: { setupWarning: string | n
             )}
           </section>
           <div className="wc-stage">
-            {!inCall ? (
+            {sessionStatus === 'error' ? <p className="wc-notice wc-notice-warn" role="status">Connection lost. Showing the last known state while retrying…</p> : null}
+            {stageNow && view ? <RightNowCard view={view} now={now} inCall={false} /> : null}
+            {askedList ? <AskedTickets list={askedList} /> : null}
+            {inCall && view?.documents.length ? <DocumentList documents={view.documents} onOpen={showDoc} /> : null}
+            {!stageNow && !askedList ? (
               <section className="wc-welcome-it wc-enter" aria-label="Welcome">
                 <p className="wc-eyebrow" data-live={view?.integrations.tickets === 'live'}><span className="wc-dot" aria-hidden="true" />{view?.integrations.tickets === 'live' ? 'Live on ServiceNow' : 'Simulated ServiceNow'}</p>
                 <h2>Hi {view?.employee.firstName ?? 'there'}, I&apos;m ASK IT. Tell me what&apos;s wrong.</h2>
                 <p>Most issues get fixed right on the call. Anything that needs a person becomes a ticket you can follow here.</p>
               </section>
             ) : null}
-            {side}
           </div>
           {inCall ? <CallMount call={call} /> : null}
         </main>

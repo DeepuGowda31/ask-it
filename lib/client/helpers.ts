@@ -119,3 +119,13 @@ export async function connectWithFallback<T>(attempt: (proxy: boolean) => Promis
     throw e;
   }
 }
+
+type TextLink = { dropped: boolean; action: 'none' | 'resubscribe' | 'relogin' };
+
+// The live text runs apart from the voice: a drop is shown, a failed link signs in again, and the channel is picked up again once back.
+export function textLink(dropped: boolean, state: string): TextLink {
+  if (state === 'RECONNECTING' || state === 'DISCONNECTED') return { dropped: true, action: 'none' };
+  if (state === 'FAILED') return { dropped: true, action: 'relogin' };
+  if (state === 'CONNECTED') return { dropped: false, action: dropped ? 'resubscribe' : 'none' };
+  return { dropped, action: 'none' };
+}

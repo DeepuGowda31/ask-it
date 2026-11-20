@@ -32,13 +32,7 @@ function AgentBody({ text, catalog }: { text: string; catalog: ReadonlyMap<strin
 }
 
 // Live transcript: follows new turns unless the user scrolled up, then offers "jump to latest".
-// Tickets the employee asked to see, shown under the ASK IT turn that answered.
-interface AttachedTickets {
-  id: string;
-  rows: { number: string; summary: string; state: string }[];
-}
-
-export function Transcript({ messages, placeholder, catalog = NO_TICKETS, attached = null }: { messages: TranscriptMessage[]; placeholder: string; catalog?: ReadonlyMap<string, TicketInfo>; attached?: AttachedTickets | null }) {
+export function Transcript({ messages, placeholder, catalog = NO_TICKETS }: { messages: TranscriptMessage[]; placeholder: string; catalog?: ReadonlyMap<string, TicketInfo> }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [following, setFollowing] = useState(true);
   const { visible, hidden } = capTranscript(messages, MAX_RENDERED);
@@ -74,17 +68,6 @@ export function Transcript({ messages, placeholder, catalog = NO_TICKETS, attach
                 {m.interrupted ? <span className="ml-2 wc-tone-warn">· interrupted</span> : null}
               </div>
               {m.role === 'agent' ? <AgentBody text={m.text} catalog={catalog} /> : <div className="wc-msg-body">{m.text || '…'}</div>}
-              {attached?.id === m.id && attached.rows.length ? (
-                <ul className="wc-ticket-lines wc-msg-tickets">
-                  {attached.rows.map((t) => (
-                    <li key={t.number} title={t.summary}>
-                      <span className="wc-mono">{t.number}</span>
-                      <span className="min-w-0 truncate">{t.summary}</span>
-                      <span className="wc-chip" data-tone={statusTone(t.state)}>{t.state}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
             </article>
           ))
         )}

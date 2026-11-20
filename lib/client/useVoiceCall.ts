@@ -58,6 +58,7 @@ export function useVoiceCall({ code, persona, now, recentAction, thinkingHint }:
   const [agentEvents, setAgentEvents] = useState<AgentEvent[]>([]);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [resumeAudio, setResumeAudio] = useState<(() => void) | null>(null);
+  const [textPaused, setTextPaused] = useState(false);
   const [noSound, setNoSound] = useState(false);
   const [levels, setLevels] = useState<{ local: AudioLevelSource | null; remote: AudioLevelSource | null }>({ local: null, remote: null });
   const probe = useRef<CallProbe | null>(null);
@@ -100,6 +101,7 @@ export function useVoiceCall({ code, persona, now, recentAction, thinkingHint }:
       setAgentEvents([]);
       setVoiceError(null);
       setResumeAudio(null);
+      setTextPaused(false);
       setNoSound(false);
       setAgentState(null);
       setAgentIn(false);
@@ -223,6 +225,7 @@ export function useVoiceCall({ code, persona, now, recentAction, thinkingHint }:
         }
       },
       onAudioBlocked: (resume) => setResumeAudio(() => resume),
+      onTextLink: (paused) => setTextPaused(paused),
       onIssue: (message) => setIssues((prev) => (prev.includes(message) ? prev : [message, ...prev].slice(0, 5))),
       onProbe: (p) => {
         probe.current = p;
@@ -306,6 +309,7 @@ export function useVoiceCall({ code, persona, now, recentAction, thinkingHint }:
     agentEvents,
     voiceError,
     resumeAudio,
+    textPaused,
     noSound,
     callbacks,
     probe,

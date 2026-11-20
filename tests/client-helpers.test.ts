@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { cleanSpokenText, describeMicError, capTranscript, formatCountdown, formatHours, formatRate, ticketQueue, ageLabel, durationLabel, holdLabel, priorityTone, alertProblem, introDue, withTimeout, connectWithFallback } from '@/lib/client/helpers';
+import { cleanSpokenText, describeMicError, capTranscript, formatCountdown, formatHours, formatRate, ticketQueue, ageLabel, durationLabel, holdLabel, priorityTone, alertProblem, introDue, withTimeout, connectWithFallback, textLink } from '@/lib/client/helpers';
 import { MINUTE } from '@/lib/domain/time';
 import { NOW } from './helpers';
 
@@ -225,5 +225,24 @@ describe('connectWithFallback', () => {
     await check;
     expect(cleanup.mock.calls).toEqual([[false], [true]]);
     vi.useRealTimers();
+  });
+});
+
+describe('textLink', () => {
+  it('marks the live text as dropped while it reconnects, and asks for nothing yet', () => {
+    expect(textLink(false, 'RECONNECTING')).toEqual({ dropped: true, action: 'none' });
+    expect(textLink(false, 'DISCONNECTED')).toEqual({ dropped: true, action: 'none' });
+  });
+  it('signs in again when the link has failed for good', () => {
+    expect(textLink(false, 'FAILED')).toEqual({ dropped: true, action: 'relogin' });
+    expect(textLink(true, 'FAILED')).toEqual({ dropped: true, action: 'relogin' });
+  });
+  it('picks the channel up again once it is back, only after a drop', () => {
+    expect(textLink(true, 'CONNECTED')).toEqual({ dropped: false, action: 'resubscribe' });
+    expect(textLink(false, 'CONNECTED')).toEqual({ dropped: false, action: 'none' });
+  });
+  it('keeps the state for anything else', () => {
+    expect(textLink(true, 'CONNECTING')).toEqual({ dropped: true, action: 'none' });
+    expect(textLink(false, 'CONNECTING')).toEqual({ dropped: false, action: 'none' });
   });
 });

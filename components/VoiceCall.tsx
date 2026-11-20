@@ -66,6 +66,7 @@ export function CallBanners({ call }: { call: VoiceCall }) {
           <button className="wc-btn" onClick={() => call.resumeAudio?.()}>Enable sound</button>
         </div>
       ) : null}
+      {call.textPaused && live ? <p className="wc-notice wc-notice-warn" role="status">Live text reconnecting. Your call continues.</p> : null}
       {call.issues.length ? <p className="wc-notice wc-notice-warn" role="alert">{call.issues[0]}</p> : null}
       {call.phase === 'ended' && call.error ? <p className="wc-notice wc-notice-bad" role="alert">{call.error}</p> : null}
       {call.noSound && live && !call.resumeAudio ? <p className="wc-notice" role="status">No sound? Check your output device and volume.</p> : null}

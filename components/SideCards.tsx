@@ -202,3 +202,32 @@ export function MyTickets({ view }: { view: SessionView }) {
     </Card>
   );
 }
+
+const LIST_SHOWN = 5;
+const LIST_TITLE = { open: 'Your open tickets', resolved: 'Your resolved tickets', all: 'Your tickets' } as const;
+const PERIOD_WORDS: Record<string, string> = { today: 'today', yesterday: 'yesterday', this_week: 'this week', last_7_days: 'last 7 days', this_month: 'this month' };
+
+// The tickets the employee asked for on this call: a few lines, never a scrolling list.
+export function AskedTickets({ list }: { list: NonNullable<SessionView['ticketList']> }) {
+  // Open ones first, so the few shown are the ones still being worked on.
+  const rows = [...list.tickets].sort((a, b) => Number(b.open) - Number(a.open)).slice(0, LIST_SHOWN);
+  const more = list.tickets.length - rows.length;
+  return (
+    <Card title={LIST_TITLE[list.status as keyof typeof LIST_TITLE] ?? LIST_TITLE.all} meta={list.period ? <span className="wc-faint text-[12px]">{PERIOD_WORDS[list.period] ?? list.period}</span> : undefined}>
+      {rows.length === 0 ? (
+        <p className="wc-note">Nothing here.</p>
+      ) : (
+        <ul className="wc-ticket-lines">
+          {rows.map((t) => (
+            <li key={t.number} title={t.summary}>
+              <span className="wc-mono">{t.number}</span>
+              <span className="min-w-0 truncate">{t.summary}</span>
+              <span className="wc-chip" data-tone={statusTone(t.state)}>{t.state}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {more > 0 ? <p className="wc-faint mt-2 text-[12px]">and {more} more</p> : null}
+    </Card>
+  );
+}

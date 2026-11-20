@@ -350,7 +350,6 @@ button:disabled {
 .wc-ticket-lines li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 8px 12px; border-top: 1px solid var(--hairline); font-size: 14px; line-height: 20px; }
 .wc-ticket-lines li:first-child { border-top: 0; }
 .wc-ticket-lines .wc-mono { font-size: 12px; color: var(--foreground); }
-.wc-msg-tickets { margin-top: 8px; max-width: 560px; }
 .wc-ticket-scroll { max-height: min(46vh, 420px); overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--hairline-strong) transparent; }
 .wc-msg-body > p + .wc-ticket-lines, .wc-msg-body > .wc-ticket-lines + p { margin-top: 10px; }
 .wc-card .wc-ticket-lines { margin: 0; font-size: 13px; }
@@ -428,20 +427,9 @@ button:disabled {
 .wc-welcome-it > p:last-child { max-width: 56ch; font-size: clamp(15px, 1.25vw, 18px); line-height: 1.6; color: var(--muted-foreground); }
 .wc-eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ring); }
 .wc-eyebrow[data-live='true'] .wc-dot { background: var(--success); }
-/* Employee: the IT page's frame with the call on the left and its own blue accent */
-.wc-emp { --accent: #6e9bff; --accent-hover: #8fb2ff; --accent-ink: #061634; --accent-soft: rgb(110 155 255 / 0.12); --ring: #b6caff; }
+/* Employee: the IT page's frame and colours, with the call on the left */
 .wc-emp-main { grid-template-columns: 400px minmax(0, 1fr); }
-.wc-emp .wc-welcome-it { background: radial-gradient(120% 90% at 0% 100%, rgb(110 155 255 / 0.12), transparent 60%), rgb(255 255 255 / 0.015); }
 .wc-emp .wc-welcome-it h2 { max-width: 22ch; }
-.wc-emp .wc-chip[data-tone='info'] { border-color: rgb(110 155 255 / 0.35); }
-.wc-emp .wc-now[data-kind='confirm'], .wc-emp .wc-now[data-kind='verify'], .wc-emp .wc-now[data-kind='fix'], .wc-emp .wc-now[data-kind='lockdown'] { border-color: rgb(110 155 255 / 0.45); }
-.wc-emp .wc-now[data-kind='confirm'] { box-shadow: 0 0 24px rgb(110 155 255 / 0.18); }
-.wc-emp .wc-progress li[data-state='done'] { background: rgb(110 155 255 / 0.5); }
-.wc-emp .wc-stage .wc-side { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
-.wc-emp[data-call] .wc-stage .wc-side { flex: 1; }
-.wc-emp[data-call] .wc-side > .wc-card:has(.wc-ticket-scroll) { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.wc-emp[data-call] .wc-ticket-scroll { flex: 0 1 auto; min-height: 0; max-height: none; }
-.wc-emp:not([data-call]) .wc-ticket-scroll { max-height: 236px; }
 .wc-emp-callhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; }
 .wc-emp-signal .wc-signal canvas { height: 64px; }
 .wc-emp-signal .wc-signal-caption { display: none; }
@@ -450,7 +438,6 @@ button:disabled {
 .wc-emp .wc-msg-header { font-size: 11px; line-height: 16px; }
 .wc-emp .wc-msg-body { font-size: 14px; line-height: 22px; }
 .wc-emp .wc-msg-user .wc-msg-body { padding: 7px 12px; border-radius: 12px; }
-.wc-emp .wc-msg-tickets { max-width: none; }
 .wc-board { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 20px 20px; border: 1px solid var(--hairline); border-radius: 16px; background: rgb(255 255 255 / 0.015); scrollbar-width: thin; scrollbar-color: var(--hairline-strong) transparent; }
 /* dashboard: the open queue, the day's flow, then where the work sits */
 .wc-dash { display: grid; gap: 16px; }
