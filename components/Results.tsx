@@ -92,9 +92,9 @@ function DayColumns({ days }: { days: Dashboard['days'] }) {
 
 type Stat = { value: string; label: string; sub?: string; tone?: 'bad' | 'warn' };
 
-function Stats({ stats, size, label }: { stats: Stat[]; size: 'lg' | 'sm'; label: string }) {
+function Stats({ stats, label }: { stats: Stat[]; label: string }) {
   return (
-    <ul className="wc-stats" data-size={size} aria-label={label}>
+    <ul className="wc-stats" aria-label={label}>
       {stats.map((t) => (
         <li key={t.label} data-tone={t.tone}>
           <span className="wc-stat-label">{t.tone ? <span className="wc-dot" aria-hidden="true" /> : null}{t.label}</span>
@@ -106,32 +106,50 @@ function Stats({ stats, size, label }: { stats: Stat[]; size: 'lg' | 'sm'; label
   );
 }
 
+// Secondary numbers on one quiet line under the headline tiles.
+function Facts({ facts }: { facts: { label: string; value: string; sub?: string }[] }) {
+  return (
+    <dl className="wc-facts" aria-label="Flow">
+      {facts.map((f) => (
+        <div key={f.label}>
+          <dt>{f.label}</dt>
+          <dd>{f.value}{f.sub ? <small>{f.sub}</small> : null}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 function DashboardView({ d, now }: { d: Dashboard; now: number }) {
   const n = (v: number) => String(v);
-  const queue: Stat[] = [
+  const headline: Stat[] = [
     { value: d.more ? `${d.total}+` : n(d.total), label: 'Open incidents', sub: `${d.inProgress} in progress` },
     { value: n(d.critical), label: 'Critical', tone: d.critical ? 'bad' : undefined },
     { value: n(d.unassigned), label: 'Unassigned', tone: d.unassigned ? 'warn' : undefined },
     { value: n(d.onHold), label: 'On hold', sub: 'Blocked', tone: d.onHold ? 'warn' : undefined },
-    { value: d.oldest ? ageLabel(d.oldest.openedAt, now) : 'None', label: 'Oldest open', sub: d.oldest?.number },
   ];
-  const flow: Stat[] = [
-    { value: n(d.openedToday), label: 'New today' },
-    { value: n(d.resolvedToday), label: 'Resolved today' },
-    { value: n(d.resolvedWeek), label: 'Resolved, last 7 days' },
-    { value: d.avgResolve ? durationLabel(d.avgResolve.ms) : 'None', label: 'Avg time to resolve', sub: d.avgResolve ? `Last 7 days, ${d.avgResolve.count} ${d.avgResolve.count === 1 ? 'incident' : 'incidents'}` : 'Last 7 days' },
+  const facts = [
+    { label: 'New today', value: n(d.openedToday) },
+    { label: 'Resolved today', value: n(d.resolvedToday) },
+    { label: 'Resolved in 7 days', value: n(d.resolvedWeek) },
+    { label: 'Avg time to resolve', value: d.avgResolve ? durationLabel(d.avgResolve.ms) : 'None' },
+    { label: 'Oldest open', value: d.oldest ? ageLabel(d.oldest.openedAt, now) : 'None', sub: d.oldest?.number },
   ];
   return (
     <div className="wc-dash">
-      <Stats stats={queue} size="lg" label="Open queue" />
-      <Stats stats={flow} size="sm" label="Flow" />
+      <Stats stats={headline} label="Open queue" />
+      <Facts facts={facts} />
       <div className="wc-dash-grid">
-        <div className="wc-dash-col">
-          <StateBar rows={d.byState} />
+        <section className="wc-panel">
           <BarList title="Open by priority" rows={d.byPriority} bad={['Critical']} />
-        </div>
-        <BarList title="Open by team" rows={d.byTeam} />
-        <DayColumns days={d.days} />
+          <StateBar rows={d.byState} />
+        </section>
+        <section className="wc-panel">
+          <BarList title="Open by team" rows={d.byTeam} />
+        </section>
+        <section className="wc-panel">
+          <DayColumns days={d.days} />
+        </section>
       </div>
     </div>
   );

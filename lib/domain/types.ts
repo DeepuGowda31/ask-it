@@ -287,6 +287,8 @@ interface ItDesk {
   backlog: OpenIncident[];
   // Missing in sessions saved before boards existed.
   board?: DeskBoard | null;
+  // What the engineer asked to see last: the open incident or the board. Missing in older sessions.
+  focus?: 'incident' | 'board';
   // The last report asked for; missing in sessions saved before reports existed.
   report?: ReportRequest | null;
 }

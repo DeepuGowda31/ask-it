@@ -21,6 +21,15 @@ const item = (i: DeskIncident) => ({
   openedAt: i.openedAt,
 });
 
+// People and person boards are about who takes the open incident, so it stays above them; any other board replaces it.
+function stageOf(desk: SessionState['itdesk'], waiting: boolean) {
+  const focus = desk.focus ?? (desk.board ? 'board' : 'incident');
+  const beside = desk.board?.kind === 'people' || desk.board?.kind === 'person';
+  const incident = Boolean(desk.current) && (focus === 'incident' || beside || waiting);
+  const board = Boolean(desk.board) && (focus === 'board' || (beside && !waiting));
+  return { incident, board };
+}
+
 export function buildItDeskView(state: SessionState, now: number) {
   const desk = state.itdesk;
   const current = desk.current;
@@ -33,5 +42,6 @@ export function buildItDeskView(state: SessionState, now: number) {
     updateRequest: desk.updateRequest ?? null,
     report: desk.report ? { id: desk.report.id, status: desk.report.status, requestedAt: desk.report.requestedAt, filename: desk.report.filename ?? null, ...reportNames(desk.report.period) } : null,
     pending: waiting?.payload.kind === 'incident' ? { code: waiting.code, number: waiting.payload.number, summary: waiting.summary, changes: waiting.payload.changes, expiresAt: waiting.expiresAt } : null,
+    stage: stageOf(desk, Boolean(waiting)),
   };
 }

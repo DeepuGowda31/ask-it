@@ -106,6 +106,7 @@ const listQueue = tool<Result<DeskIncident[]>>({
     const list = effect.value.slice(0, SCREEN_LIMIT);
     state.itdesk.queue = list;
     state.itdesk.board = { kind: 'list', title: d.title, total: list.length, more, at: now, query: boardQuery(args) };
+    state.itdesk.focus = 'board';
     const incidents = list.map((i, n) => ({ position: n + 1, number: i.number, summary: i.summary, priority: i.priorityLabel, state: i.stateLabel, assignee: i.assignee?.name ?? null, group: i.group?.name ?? null, caller: i.caller }));
     return {
       title: list.length ? `Queue: ${more ? `${SCREEN_LIMIT}+ ${d.noun(2)}` : d.phrase(list.length)}` : `Queue: no ${d.noun(0)}`,
@@ -141,6 +142,7 @@ const countIncidents = tool<Result<DeskIncident[]>>({
     const groupBy = (args.groupBy || null) as GroupBy | null;
     const groups = groupBy ? groupIncidents(list, groupBy, now) : [];
     state.itdesk.board = { kind: 'count', title: d.title, total: list.length, more, groupBy, groups, at: now, query: boardQuery(args) };
+    state.itdesk.focus = 'board';
     const total = more ? `are more than five hundred ${d.noun(2)}` : list.length === 0 ? `are no ${d.noun(0)}` : `${list.length === 1 ? 'is' : 'are'} ${d.phrase(list.length)}`;
     const read = groups.slice(0, READ_GROUPS).map((g) => `${g.label} ${g.count}`);
     const breakdown = groupBy && read.length ? ` By ${GROUP_WORD[groupBy]}: ${read.join(', ')}${groups.length > READ_GROUPS ? ', and the rest are on your screen' : ''}.` : '';
@@ -211,6 +213,7 @@ const showDashboard = tool<{ open: Result<DeskIncident[]>; activity: Result<Acti
     if (!effect || failed || !effect.open.ok || !effect.activity.ok) return failureOutcome('Dashboard unavailable', 'queue_unavailable', failed ?? { kind: 'network' }, 'build the dashboard');
     const d = dashboardOf(effect.open.value, effect.activity.value, now);
     state.itdesk.board = { kind: 'dashboard', at: now, ...d };
+    state.itdesk.focus = 'board';
     return { title: `Dashboard: ${plural(d.total, 'open incident')}`, result: ok(dashboardSay(d, now), { ...d }) };
   },
 });
@@ -223,6 +226,7 @@ const showImpact = tool({
   run({ state, now }) {
     const m = state.metrics;
     state.itdesk.board = { kind: 'impact', at: now };
+    state.itdesk.focus = 'board';
     const parts = [
       m.resolvedByAgent && `fixed ${plural(m.resolvedByAgent, 'issue')} on the call`,
       m.ticketsRaised && `raised ${plural(m.ticketsRaised, 'ticket')}`,
@@ -330,6 +334,7 @@ const openIncident = tool<OpenEffect>({
     const notes = effect.notes?.ok ? effect.notes.value : [];
     const incident: OpenIncident = { ...hits[0], notes };
     state.itdesk.current = incident;
+    state.itdesk.focus = 'incident';
     return {
       title: `Opened ${incident.number} · ${incident.summary}`,
       result: ok(
@@ -387,6 +392,9 @@ const requestUpdate = tool<OpenEffect & { mode: Mode }>({
     const text = `Update requested: ${i.assignee.name}, the IT desk needs an update on ${i.number}, ${i.summary}, by ${formatTime(due)}. Please reply with where you are and any blockers.`;
     const alert = queueAlert(state, now, 'updateRequest', text);
     state.itdesk.updateRequest = { number: i.number, assignee: i.assignee.name, due, at: now };
+    // The card shows the request, so the incident asked about becomes the open one; its notes come with the next refresh.
+    if (state.itdesk.current?.number !== i.number) state.itdesk.current = { ...i, notes: [] };
+    state.itdesk.focus = 'incident';
     const say = `Done. I've asked ${i.assignee.name} in the IT helpdesk channel for an update on ${spokenTicket(i.number)} by ${formatTime(due)}. ${alertSay(effect.mode)}`;
     return { title: `Update requested from ${i.assignee.name} on ${i.number}`, alerts: [alert], result: ok(say, { number: i.number, assignee: i.assignee.name, due }) };
   },
@@ -608,6 +616,7 @@ const prepareIncidentUpdate = tool<UpdateEffect>({
     const replaced = state.pending.filter((a) => a.status === 'pending' && a.payload.kind === 'incident' && a.payload.number === incident.number);
     for (const a of replaced) a.status = 'cancelled';
     state.itdesk.current = { ...incident, notes: state.itdesk.current?.number === incident.number ? state.itdesk.current.notes : [] };
+    state.itdesk.focus = 'incident';
 
     const owner = user ?? incident.assignee;
     const alert = 'assigned_to' in fields || 'assignment_group' in fields ? `${incident.number} assigned to ${[owner?.name ?? 'nobody', groupName].filter(Boolean).join(', ')}, from the IT desk.` : undefined;
@@ -690,6 +699,7 @@ const listResources = tool<Result<Resource[]>>({
     const nobodyFree = status === 'available' && !free.length;
     const shown = status === 'all' || nobodyFree ? everyone : status === 'available' ? free : taken;
     state.itdesk.board = { kind: 'people', title: team ?? 'All teams', status: nobodyFree ? 'all' : status, available: free.length, busy: taken.length, people: shown.map(card), at: now };
+    state.itdesk.focus = 'board';
     const where = team ? `in ${team}` : 'across the IT teams';
     const are = (n: number) => (n === 1 ? 'is' : 'are');
     const least = [...everyone].sort((a, b) => a.open.length - b.open.length)[0];
@@ -734,6 +744,7 @@ const showResource = tool<Result<Resource[]>>({
     if (hits.length > 1) return failed(`Person: ${hits.length} match ${said}`, 'ambiguous_person', `Which ${said}: ${orList(hits.map((p) => p.name))}?`, hits.map((p) => p.name));
     const p = hits[0];
     state.itdesk.board = { kind: 'person', person: card(p), at: now };
+    state.itdesk.focus = 'board';
     const list = p.open.map((t) => `${spokenTicket(t.number)}, ${t.summary}, ${t.priorityLabel.toLowerCase()} priority`);
     const work = p.open.length ? `has ${tickets(p)}: ${overflow(list, SPOKEN_TICKETS, '; ') ?? list.join('; ')}.` : 'is free right now.';
     const current = state.itdesk.current;

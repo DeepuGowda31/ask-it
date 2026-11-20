@@ -17,6 +17,7 @@ import { useVoiceCall } from '@/lib/client/useVoiceCall';
 const SESSION_KEY = 'askit.session';
 // Quiet time after the greeting before the short intro.
 const INTRO_DELAY_MS = 3000;
+const REPORT_SHOWN_MS = 2 * 60_000;
 
 // Connected systems in the header; Slack turns red while its alerts are failing.
 function Systems({ view }: { view: SessionView }) {
@@ -149,6 +150,9 @@ export default function ItDashboard({ initialCode }: { initialCode: string }) {
   }
 
   const board = view.itdesk.board;
+  const stage = view.itdesk.stage;
+  // A report stays on screen while it is built and briefly after, for Download again.
+  const reportShown = view.itdesk.report && (view.itdesk.report.status === 'pending' || now - view.itdesk.report.requestedAt < REPORT_SHOWN_MS) ? view.itdesk.report : null;
 
   const live = (
     <span className="wc-live whitespace-nowrap" data-on={view.call.active} role="status" aria-live="polite">
@@ -165,9 +169,14 @@ export default function ItDashboard({ initialCode }: { initialCode: string }) {
       <main id="main-content" className="wc-it-main">
         <div className="wc-stage">
           {status === 'error' ? <p className="wc-notice wc-notice-warn" role="status">Connection lost. Showing the last known state while retrying…</p> : null}
-          <LiveIncident desk={view.itdesk} now={now} />
-          {view.itdesk.report ? <ReportCard key={view.itdesk.report.id} report={view.itdesk.report} now={now} onDownload={report.downloadAgain} busy={report.busy} /> : null}
-          {board ? <section key={board.at} className="wc-board wc-enter" aria-live="polite"><Results view={view} now={now} /></section> : <Welcome live={view.integrations.tickets === 'live'} />}
+          {/* Only the answer to the last question: the open incident, the board, or both when the board is about who takes the incident. */}
+          {stage.incident || !view.itdesk.current ? <LiveIncident desk={view.itdesk} now={now} /> : null}
+          {reportShown ? <ReportCard key={reportShown.id} report={reportShown} now={now} onDownload={report.downloadAgain} busy={report.busy} /> : null}
+          {board && stage.board && !(reportShown && reportShown.requestedAt > board.at) ? (
+            <section key={board.at} className="wc-board wc-enter" aria-live="polite"><Results view={view} now={now} /></section>
+          ) : stage.incident || reportShown ? null : (
+            <Welcome live={view.integrations.tickets === 'live'} />
+          )}
         </div>
         <CallPanel call={call} now={now} catalog={catalog} />
         <CallMount call={call} />

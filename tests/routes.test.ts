@@ -57,7 +57,7 @@ describe('/api/state', () => {
     expect(body.call.active).toBe(false);
     expect(body.integrations).toEqual({ tickets: 'simulated', identity: 'simulated', notify: 'simulated', status: 'live' });
     expect(body.tickets).toHaveLength(2);
-    expect(body.itdesk).toEqual({ queue: [], current: null, lastUpdate: null, pending: null, board: null, updateRequest: null, report: null });
+    expect(body.itdesk).toEqual({ queue: [], current: null, lastUpdate: null, pending: null, board: null, updateRequest: null, report: null, stage: { incident: false, board: false } });
     expect(body.employee.email).toBe('p***@nimbuslabs.example');
     expect(body.account.email).toBe('p***@nimbuslabs.example');
     expect(JSON.stringify(body)).not.toMatch(/priya\.sharma@/);
