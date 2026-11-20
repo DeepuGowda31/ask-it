@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowDown } from 'lucide-react';
 import type { TranscriptMessage } from '@/lib/conversation';
 import { capTranscript } from '@/lib/client/helpers';
@@ -11,24 +11,20 @@ const MAX_RENDERED = 200;
 const NO_TICKETS: ReadonlyMap<string, TicketInfo> = new Map();
 
 // Agent turns that read out tickets show one line per ticket; other turns show INC numbers as written.
-// maxRows caps a long list to a few lines and says how many more there are.
-export function AgentBody({ text, catalog, maxRows }: { text: string; catalog: ReadonlyMap<string, TicketInfo>; maxRows?: number }) {
+function AgentBody({ text, catalog }: { text: string; catalog: ReadonlyMap<string, TicketInfo> }) {
   const list = ticketList(text, catalog);
   if (!list) return <div className="wc-msg-body">{displayTicketNumbers(text) || '…'}</div>;
-  const shown = maxRows ? list.items.slice(0, maxRows) : list.items;
-  const more = list.items.length - shown.length;
   return (
     <div className="wc-msg-body">
       {list.intro ? <p>{list.intro}</p> : null}
       <ul className="wc-ticket-lines">
-        {shown.map((i) => (
+        {list.items.map((i) => (
           <li key={i.number}>
             <span className="wc-mono">{i.number}</span>
             <span className="min-w-0">{i.summary}</span>
             {i.status ? <span className="wc-chip" data-tone={statusTone(i.status)}>{i.status}</span> : <span />}
           </li>
         ))}
-        {more > 0 ? <li className="wc-ticket-more">and {more} more</li> : null}
       </ul>
       {list.outro ? <p>{list.outro}</p> : null}
     </div>
@@ -36,8 +32,7 @@ export function AgentBody({ text, catalog, maxRows }: { text: string; catalog: R
 }
 
 // Live transcript: follows new turns unless the user scrolled up, then offers "jump to latest".
-// The employee screen speaks its captions elsewhere, so its history passes announce={false}, caps ticket lists and attaches cards to turns (extras, by message id).
-export function Transcript({ messages, placeholder, catalog = NO_TICKETS, announce = true, maxTicketRows, extras }: { messages: TranscriptMessage[]; placeholder: string; catalog?: ReadonlyMap<string, TicketInfo>; announce?: boolean; maxTicketRows?: number; extras?: ReadonlyMap<string, ReactNode> }) {
+export function Transcript({ messages, placeholder, catalog = NO_TICKETS }: { messages: TranscriptMessage[]; placeholder: string; catalog?: ReadonlyMap<string, TicketInfo> }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [following, setFollowing] = useState(true);
   const { visible, hidden } = capTranscript(messages, MAX_RENDERED);
@@ -56,7 +51,7 @@ export function Transcript({ messages, placeholder, catalog = NO_TICKETS, announ
 
   return (
     <div className="wc-transcript">
-      <div ref={scroller} className="wc-transcript-scroll" role="log" aria-live={announce ? 'polite' : 'off'} aria-label="Live transcript" tabIndex={0} onScroll={onScroll}>
+      <div ref={scroller} className="wc-transcript-scroll" role="log" aria-live="polite" aria-label="Live transcript" tabIndex={0} onScroll={onScroll}>
         {hidden > 0 ? <p className="wc-note text-center">{hidden} earlier turns hidden — export them from the Inspector.</p> : null}
         {visible.length === 0 ? (
           <div className="wc-msg">
@@ -72,8 +67,7 @@ export function Transcript({ messages, placeholder, catalog = NO_TICKETS, announ
                 {m.streaming ? <span className="ml-2">· live</span> : null}
                 {m.interrupted ? <span className="ml-2 wc-tone-warn">· interrupted</span> : null}
               </div>
-              {m.role === 'agent' ? <AgentBody text={m.text} catalog={catalog} maxRows={maxTicketRows} /> : <div className="wc-msg-body">{m.text || '…'}</div>}
-              {extras?.get(m.id)}
+              {m.role === 'agent' ? <AgentBody text={m.text} catalog={catalog} /> : <div className="wc-msg-body">{m.text || '…'}</div>}
             </article>
           ))
         )}

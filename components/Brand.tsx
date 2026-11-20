@@ -23,7 +23,7 @@ type Mark = keyof typeof MARKS;
 export function BrandMark({ mark = 'helpdesk', className = 'wc-brand-mark' }: { mark?: Mark; className?: string }) {
   return (
     <svg className={className} viewBox="0 0 32 32" aria-hidden="true">
-      <rect x="0.5" y="0.5" width="31" height="31" rx="9" fill="var(--accent-soft)" stroke="var(--accent-line)" />
+      <rect x="0.5" y="0.5" width="31" height="31" rx="9" fill="var(--accent-soft)" stroke="rgb(56 214 196 / 0.35)" />
       <g transform="translate(6.4 6.4) scale(0.8)" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         {MARKS[mark]}
       </g>

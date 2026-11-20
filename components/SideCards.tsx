@@ -1,19 +1,20 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Activity, CircleAlert, CircleCheck, CircleMinus, CircleX, Clock3, FileText, Mail, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Activity, BellRing, CircleAlert, CircleCheck, CircleMinus, CircleX, Clock3, FileText, Mail, ShieldAlert, ShieldCheck } from 'lucide-react';
 import type { SessionView } from '@/lib/domain/view';
 import { formatCountdown, ticketQueue } from '@/lib/client/helpers';
 import { rightNow } from '@/lib/client/right-now';
 import { statusTone } from '@/lib/client/ticket-lines';
 import { dateLabel } from '@/lib/client/format';
+import { reminderLabel } from '@/lib/domain/reminders';
 
 type Mode = 'live' | 'simulated';
 
 // Live (with the system name) or Simulated.
 function ModeBadge({ mode, system }: { mode: Mode; system: string }) {
   return (
-    <span className="wc-chip" data-tone={mode === 'live' ? 'ok' : undefined} title={mode === 'live' ? `Connected to ${system}` : `${system} is simulated`}>
+    <span className="wc-chip" data-tone={mode === 'live' ? 'ok' : undefined} title={mode === 'live' ? `Connected to ${system}` : `${system} is simulated in this demo`}>
       <span className="wc-dot" aria-hidden="true" />
       {mode === 'live' ? `Live · ${system}` : 'Simulated'}
     </span>
@@ -46,14 +47,6 @@ const FACTOR: Record<string, string> = {
 };
 
 export function AccountCard({ account }: { account: SessionView['account'] }) {
-  // Live accounts are only shown as Auth0 read them.
-  if (account.locked === null) {
-    return (
-      <Card title="Account" meta={<ModeBadge mode={account.source} system="Auth0" />}>
-        <p className="wc-muted">{account.readFailed ? "Couldn't read your account from Auth0. ASK IT checks again when you call." : 'Reading your account from Auth0…'}</p>
-      </Card>
-    );
-  }
   return (
     <Card title="Account" meta={<ModeBadge mode={account.source} system="Auth0" />}>
       <dl className="wc-kv">
@@ -187,43 +180,12 @@ export function RightNowCard({ view, now, inCall }: { view: SessionView; now: nu
 
 const MAX_TICKETS = 5;
 
-type TicketRow = SessionView['tickets'][number];
-const fixedOnCall = (t: TicketRow) => 'fixedOnCall' in t && Boolean(t.fixedOnCall);
-const FixedTag = () => <span className="em-fixed">Fixed on call</span>;
-
-const LIST_TITLE = { open: 'Open tickets', resolved: 'Resolved tickets', all: 'Your tickets' } as const;
-const LIST_ROWS = 3;
-
-// The tickets ASK IT just read out, as a small card in the conversation: title, number and status, a few rows at most.
-export function TicketListCard({ list }: { list: NonNullable<SessionView['ticketList']> }) {
-  const rows = list.tickets.slice(0, LIST_ROWS);
-  const more = list.tickets.length - rows.length;
-  return (
-    <section className="em-tl" aria-label={LIST_TITLE[list.status]}>
-      <p className="em-tl-head">
-        <strong>{LIST_TITLE[list.status]}</strong>
-        <span className="wc-num">{list.tickets.length}</span>
-        {list.period ? <span className="em-tl-period">{list.period}</span> : null}
-      </p>
-      {rows.length ? (
-        <ul>
-          {rows.map((t) => (
-            <li key={t.number} title={t.summary}>
-              <span className="em-tl-title">{t.summary.replace(/^Resolved by ASK IT: /, '')}</span>
-              <span className="em-tl-meta"><span className="wc-mono">{t.number}</span>{fixedOnCall(t) ? <FixedTag /> : null}</span>
-              <span className="wc-chip" data-tone={statusTone(t.state)}>{t.state}</span>
-            </li>
-          ))}
-        </ul>
-      ) : <p className="em-tl-none">None found.</p>}
-      {more > 0 ? <p className="em-tl-more">and {more} more in My tickets</p> : null}
-    </section>
-  );
-}
-
-// The employee's tickets, open first, then closed ones; one line each. Tickets in highlight are the ones ASK IT is talking about.
-export function MyTickets({ view, highlight }: { view: SessionView; highlight?: ReadonlySet<string> }) {
-  const rows = ticketQueue(view.tickets).map((t) => ({ number: t.number, summary: t.summary.replace(/^Resolved by ASK IT: /, ''), status: t.state, fixed: fixedOnCall(t) }));
+// Open tickets first, then outages the employee follows, then closed ones; one line each. Waiting reminders follow.
+export function MyTickets({ view, now }: { view: SessionView; now: number }) {
+  const rows = [
+    ...view.outages.filter((o) => o.followed).map((o) => ({ number: o.incident, summary: o.title, status: 'Outage' })),
+    ...ticketQueue(view.tickets).map((t) => ({ number: t.number, summary: t.summary.replace(/^Resolved by ASK IT: /, ''), status: t.state })),
+  ];
   return (
     <Card title="My tickets" meta={<ModeBadge mode={view.integrations.tickets} system="ServiceNow" />}>
       {rows.length === 0 ? (
@@ -231,8 +193,8 @@ export function MyTickets({ view, highlight }: { view: SessionView; highlight?: 
       ) : (
         <ul className="wc-ticket-lines">
           {rows.slice(0, MAX_TICKETS).map((t) => (
-            <li key={t.number} title={t.summary} data-mentioned={highlight?.has(t.number) || undefined}>
-              <span className="wc-mono">{t.number}{t.fixed ? <FixedTag /> : null}</span>
+            <li key={t.number} title={t.summary}>
+              <span className="wc-mono">{t.number}</span>
               <span className="min-w-0 truncate">{t.summary}</span>
               <span className="wc-chip" data-tone={statusTone(t.status)}>{t.status}</span>
             </li>
@@ -240,6 +202,16 @@ export function MyTickets({ view, highlight }: { view: SessionView; highlight?: 
         </ul>
       )}
       {rows.length > MAX_TICKETS ? <p className="wc-faint mt-2 text-[12px]">+{rows.length - MAX_TICKETS} more in the Inspector</p> : null}
+      {view.reminders.length ? (
+        <ul className="mt-2 grid gap-1" aria-label="Reminders">
+          {view.reminders.map((r) => (
+            <li key={r.id} className="flex items-center gap-2 text-[12px]">
+              <BellRing size={14} className="wc-tone-accent shrink-0" aria-hidden="true" />
+              <span className="min-w-0 truncate" title={r.about}>Reminder · {reminderLabel(r.at, now)} · about {r.about}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </Card>
   );
 }
