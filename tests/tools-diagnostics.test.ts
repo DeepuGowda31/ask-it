@@ -170,3 +170,20 @@ describe('runDiagnostics through the server', () => {
     expect(state.events).toHaveLength(1);
   });
 });
+
+describe('runDiagnostics picks the guide from what they said', () => {
+  const HOME = "I'm working from home on my phone hotspot and the internet is not working";
+  async function told(results: DiagnosticResults, focus: string, problem: string) {
+    const begun = beginTool('runDiagnostics', freshState(), { focus, problem }, NOW, 'claim-1')!;
+    const posted = recordDiagnostics(begun, begun.diagnostics!.id, results, NOW + 2000).state;
+    return call(begun, 'runDiagnostics', { focus, problem }, { reload: async () => posted });
+  }
+  it('offers the home guide, not office Wi-Fi, for someone at home', async () => {
+    expect((await told(HEALTHY, 'network', HOME)).result.say).toMatch(/Shall we go through "Home Wi-Fi or hotspot has no internet"\?$/);
+    expect((await told({}, 'network', HOME)).result.say).toMatch(/"Home Wi-Fi or hotspot has no internet" instead\?$/);
+  });
+  it('keeps the usual guide without their words, or when their words point elsewhere', async () => {
+    expect((await told(HEALTHY, 'network', '')).result.say).toMatch(/"Office Wi-Fi not connecting"\?$/);
+    expect((await told(HEALTHY, 'network', 'my printer keeps jamming')).result.say).toMatch(/"Office Wi-Fi not connecting"\?$/);
+  });
+});

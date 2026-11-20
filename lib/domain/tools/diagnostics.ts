@@ -2,6 +2,7 @@ import { nextId } from '../actions';
 import { EMPLOYEE } from '../company';
 import { FOCUSES, diagnose, type DiagnosticFocus, type DiagnosticResults, type Finding } from '../diagnose';
 import { findArticle } from '../kb';
+import { confident, rankKnowledge } from '../search';
 import type { Diagnostics, SessionState } from '../types';
 import { failed, ok, plural, tool, type Outcome } from './shared';
 
@@ -16,6 +17,13 @@ const FOCUS_GUIDE: Record<DiagnosticFocus, string> = { calls: 'meeting-audio', a
 
 const inFlight = (d: Diagnostics | null | undefined, now: number) => d?.status === 'requested' && now - d.requestedAt < STALE_MS;
 const guideTitle = (id: string) => findArticle(id)?.title ?? id;
+
+// A guide that clearly matches their words wins over the check's usual one in the same area, so "at home on a hotspot" never gets office Wi-Fi.
+function pickGuide(usual: string, problem: string): string {
+  const hit = problem.trim() ? rankKnowledge(problem)[0] : undefined;
+  if (!hit || !confident(hit)) return usual;
+  return findArticle(usual)?.category === hit.article.category ? hit.article.id : usual;
+}
 const startGuide = (id: string) => `If they agree, call startTroubleshooting with articleId ${id}.`;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -30,16 +38,16 @@ export function recordDiagnostics(state: SessionState, id: string, results: Diag
   return { state: { ...state, diagnostics: { ...d, status: 'done', doneAt: now, results, findings: diagnose(results, d.focus) } }, outcome: 'accepted' };
 }
 
-function spoken(focus: DiagnosticFocus, findings: Finding[]): Outcome {
+function spoken(focus: DiagnosticFocus, findings: Finding[], choose: (usual: string) => string): Outcome {
   const issues = findings.filter((f) => f.relevant && f.severity !== 'ok');
   const data = { focus, findings: findings.slice(0, 6).map(({ key, severity, say }) => ({ key, severity, say })) };
   if (issues.length) {
-    const guide = issues[0].guide ?? null;
+    const guide = issues[0].guide ? choose(issues[0].guide) : null;
     const advice = guide ? ` The guide "${guideTitle(guide)}" should help. Shall we go through it?` : '';
     const next = guide ? startGuide(guide) : 'Ask whether that fixed it. If not, call searchKnowledge for the problem.';
     return { title: `Laptop check · ${focus} · ${plural(issues.length, 'issue')}`, result: ok(`${issues.slice(0, 2).map((f) => f.say).join(' ')}${advice}`, { ...data, guide }, next) };
   }
-  const guide = FOCUS_GUIDE[focus];
+  const guide = choose(FOCUS_GUIDE[focus]);
   const fine = findings.find((f) => f.relevant);
   if (!fine) {
     const say = `Your browser could not give me any readings for that, so I can't tell from here. Shall we go through "${guideTitle(guide)}" instead?`;
@@ -53,7 +61,10 @@ const runDiagnostics = tool<string>({
   name: 'runDiagnostics',
   description:
     `Run live checks on the laptop ${EMPLOYEE.firstName} is calling from, in the browser: call packet loss, round trip and jitter, whether Slack, GitHub, Google and Microsoft sign-in answer, microphone, speakers, camera permission, clock and battery. Use it first for network, call quality, audio, slowness or sign-in problems. Takes a few seconds.`,
-  params: { focus: { description: 'calls for call quality, network, audio, signin, or general for slowness and anything else', enum: FOCUSES } },
+  params: {
+    focus: { description: 'calls for call quality, network, audio, signin, or general for slowness and anything else', enum: FOCUSES },
+    problem: { description: 'The problem in their words, with where they are and their device, e.g. "no internet at home on a phone hotspot"', allowEmpty: true },
+  },
   minutesSaved: 3,
   // Records the request before the wait, so the browser sees it; a call while one runs joins it.
   begin(state, args, now) {
@@ -77,11 +88,11 @@ const runDiagnostics = tool<string>({
     if (!d || d.id !== effect) return failed(`Laptop check · ${args.focus} · not started`, 'try_again', "The laptop check didn't start. Please try again.");
     if (d.status === 'requested') d.status = 'timeout';
     if (d.status === 'timeout') {
-      const guide = FOCUS_GUIDE[d.focus];
+      const guide = pickGuide(FOCUS_GUIDE[d.focus], args.problem ?? '');
       const say = `I couldn't run the checks from your browser just now, so let's go through the steps together instead. Shall we start "${guideTitle(guide)}"?`;
       return failed(`Laptop check · ${d.focus} · browser did not answer`, 'checks_unavailable', say, undefined, startGuide(guide));
     }
-    return spoken(d.focus, d.findings ?? []);
+    return spoken(d.focus, d.findings ?? [], (usual) => pickGuide(usual, args.problem ?? ''));
   },
 });
 
