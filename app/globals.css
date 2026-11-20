@@ -558,6 +558,17 @@ button:disabled {
   .wc-it { height: 100dvh; overflow: hidden; }
   .wc-stage { overflow-y: auto; }
 }
+/* Employee in a call: the page is exactly the window; only the conversation and the ticket list scroll. */
+@media (min-width: 900px) {
+  [data-call] { height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+  [data-call] .wc-workspace-session { flex: 1; min-height: 0; padding-block: 16px 24px; grid-template-rows: auto minmax(0, 1fr); align-items: stretch; }
+  [data-call] .wc-session { height: auto; min-height: 0; }
+  [data-call] .wc-workspace-session .wc-signal-area { padding-top: 0; }
+  [data-call] .wc-workspace-session .wc-signal canvas { height: 96px; }
+  [data-call] .wc-side { display: flex; flex-direction: column; min-height: 0; }
+  [data-call] .wc-side > .wc-card:last-child { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  [data-call] .wc-ticket-scroll { flex: 1; min-height: 0; max-height: none; align-content: start; }
+}
 @media (max-width: 1100px) {
   .wc-header-mid { display: none; }
   .wc-it-main { grid-template-columns: minmax(0, 1fr) 340px; }

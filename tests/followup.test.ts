@@ -123,3 +123,16 @@ describe('ringing and snoozing', () => {
     expect(isRinging(undefined, NOW)).toBe(false);
   });
 });
+
+describe('the live list is the source of truth', () => {
+  it('drops tickets ServiceNow no longer returns, but keeps records never saved there', () => {
+    const s = liveState();
+    s.tickets.push({ number: 'LOCAL-1', sysId: null, summary: 'Password reset', state: 'Resolved', urgency: 3, source: 'live', createdAt: NOW - MINUTE, updatedAt: NOW - MINUTE });
+    const next = applyTicketList(s, list(s).filter((t) => t.number !== 'INC0010011' && t.number !== 'LOCAL-1'), 'live', NOW);
+    expect(next.tickets.map((t) => t.number).sort()).toEqual(['INC0010002', 'INC0010013', 'LOCAL-1']);
+  });
+  it('keeps everything when the list comes from the simulated desk', () => {
+    const s = liveState();
+    expect(applyTicketList(s, list(s).slice(0, 1), 'simulated', NOW).tickets).toHaveLength(3);
+  });
+});

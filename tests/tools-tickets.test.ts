@@ -132,8 +132,10 @@ describe('listMyTickets', () => {
   it('refreshes the mirror from ServiceNow and sums up the open ones instead of reading them out', async () => {
     const out = await list(freshState(), 'open', '', { tickets: { mode: 'live', listMine: async () => success(REMOTE) } });
     expect(out.state.tickets[0]).toMatchObject({ number: 'INC0010042', source: 'live', sysId: 'abc' });
-    expect(out.result.data).toMatchObject({ stale: false, status: 'open', period: '', total: 2, tickets: [expect.objectContaining({ number: 'INC0010042', summary: 'Monitor flickers', state: 'In Progress', urgency: 2, source: 'live', syncFailed: false }), expect.objectContaining({ number: 'INC0011994' })] });
-    expect(out.result.say).toBe('You have 2 open tickets, both in progress. Want details on any of them?');
+    // A live list is the truth: tickets ServiceNow did not return are gone from the mirror.
+    expect(out.state.tickets.map((t) => t.number)).toEqual(['INC0010042', 'INC0010001']);
+    expect(out.result.data).toMatchObject({ stale: false, status: 'open', period: '', total: 1, tickets: [expect.objectContaining({ number: 'INC0010042', summary: 'Monitor flickers', state: 'In Progress', urgency: 2, source: 'live', syncFailed: false })] });
+    expect(out.result.say).toMatch(/^You have one open ticket, .*in progress\. Want the details\?$/);
     expect(out.result.next).toMatch(/do not read them aloud/);
   });
   it('lists everything when the status is empty or "all"', async () => {

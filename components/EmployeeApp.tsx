@@ -150,7 +150,7 @@ export default function EmployeeApp({ setupWarning }: { setupWarning: string | n
     <section className="wc-side" aria-label="Your IT status">
       {view ? (
         <>
-          {sessionStatus === 'error' ? <p className="wc-notice wc-notice-warn" role="status">Connection lost. Showing the last known state; retrying…</p> : null}
+          {sessionStatus === 'error' ? <p className="wc-notice wc-notice-warn" role="status">Connection lost. Showing the last known state while retrying…</p> : null}
           <RightNowCard view={view} now={now} inCall={inCall} />
           <MyTickets view={view} />
           <DocumentList documents={view.documents} onOpen={showDoc} />
@@ -162,7 +162,7 @@ export default function EmployeeApp({ setupWarning }: { setupWarning: string | n
   );
 
   return (
-    <div className="min-h-dvh">
+    <div className="min-h-dvh" data-call={inCall || undefined}>
       {header}
       {setupWarning && !inCall ? (
         <div className="mx-auto max-w-[1200px] px-4 md:px-10">

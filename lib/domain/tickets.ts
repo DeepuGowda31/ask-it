@@ -88,7 +88,10 @@ export function addTicket(state: SessionState, ticket: TicketRecord) {
 
 // Applies a fresh ServiceNow list to the mirror; local-only and unsynced records are kept. A state change on a known ticket is stamped.
 export function mergeRemote(state: SessionState, remote: RemoteTicket[], source: Mode, now: number) {
-  const byNumber = new Map(state.tickets.map((t) => [t.number, t]));
+  // A live list is the truth: a ticket ServiceNow no longer returns goes; a record never saved there stays for its retry.
+  const listed = new Set(remote.map((r) => r.number));
+  const kept = source === 'live' ? state.tickets.filter((t) => !t.sysId || listed.has(t.number)) : state.tickets;
+  const byNumber = new Map(kept.map((t) => [t.number, t]));
   for (const r of remote) {
     const old = byNumber.get(r.number);
     const moved = old?.sysId && old.state !== r.state ? { changedAt: now } : {};

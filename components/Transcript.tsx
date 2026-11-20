@@ -58,7 +58,7 @@ export function Transcript({ messages, placeholder, catalog = NO_TICKETS, attach
   return (
     <div className="wc-transcript">
       <div ref={scroller} className="wc-transcript-scroll" role="log" aria-live="polite" aria-label="Live transcript" tabIndex={0} onScroll={onScroll}>
-        {hidden > 0 ? <p className="wc-note text-center">{hidden} earlier turns hidden — export them from the Inspector.</p> : null}
+        {hidden > 0 ? <p className="wc-note text-center">{hidden} earlier turns are hidden. Export them from the Inspector.</p> : null}
         {visible.length === 0 ? (
           <div className="wc-msg">
             <div className="wc-msg-header"><strong>ASK IT</strong></div>
