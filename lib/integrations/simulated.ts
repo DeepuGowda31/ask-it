@@ -166,6 +166,11 @@ export class SimulatedDesk implements DeskAdapter {
     });
   }
 
+  async resolvedSince(since: number, limit: number) {
+    const done = this.state.itdesk.backlog.filter((i): i is OpenIncident & { resolvedAt: number } => typeof i.resolvedAt === 'number' && i.resolvedAt >= since);
+    return success(done.sort((a, b) => b.resolvedAt - a.resolvedAt).slice(0, limit).map(plain));
+  }
+
   async roster(teams: readonly string[]) {
     const people = new Map<string, Resource>();
     for (const g of teams.flatMap((t) => DESK_GROUPS.filter((g) => g.name === t))) {

@@ -407,6 +407,15 @@ button:disabled {
 .wc-desk-transcript .wc-transcript-scroll { gap: 16px; mask-image: linear-gradient(to bottom, transparent 0, #000 20px); }
 .wc-desk-transcript .wc-msg-body { font-size: 14px; line-height: 22px; }
 .wc-asked { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; background: var(--accent-soft); font-size: 13px; line-height: 20px; }
+/* the report the engineer asked for */
+.wc-report { flex: none; display: flex; align-items: center; gap: 12px; min-width: 0; padding: 10px 14px; border: 1px solid var(--hairline-strong); border-radius: 14px; background: rgb(255 255 255 / 0.025); font-size: 13px; line-height: 19px; }
+.wc-report strong { font-weight: 500; }
+.wc-report[data-tone='busy'] { border-color: rgb(56 214 196 / 0.4); background: var(--accent-soft); }
+.wc-report[data-tone='busy'] > svg { color: var(--accent); animation: wc-breathe 1.6s ease-in-out infinite; }
+@keyframes wc-breathe { 50% { opacity: 0.35; } }
+.wc-report[data-tone='ok'] > svg { color: var(--success); }
+.wc-report[data-tone='bad'] { border-color: rgb(255 107 107 / 0.35); }
+.wc-report[data-tone='bad'] > svg { color: var(--danger); }
 .wc-saved { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; background: rgb(74 222 128 / 0.07); font-size: 13px; line-height: 20px; }
 .wc-desk-queue li { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto 176px 130px 40px; gap: 4px 14px; align-items: center; padding: 9px 8px; margin: 0 -8px; }
 .wc-desk-queue li[aria-current='true'] { background: var(--accent-soft); border-radius: 8px; border-bottom-color: transparent; }

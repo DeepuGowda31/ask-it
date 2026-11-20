@@ -217,7 +217,7 @@ describe('speaker lock (SAL)', () => {
 describe('IT desk persona', () => {
   it('gets only the IT desk tools', () => {
     const tools = buildAgoraTools('https://askit.example.com', 'secret-123', 'itdesk');
-    expect(tools.map((t) => t.function.name).sort()).toEqual(['cancelAction', 'confirmAction', 'countIncidents', 'listQueue', 'listResources', 'openIncident', 'prepareIncidentUpdate', 'requestUpdate', 'showDashboard', 'showImpact', 'showResource']);
+    expect(tools.map((t) => t.function.name).sort()).toEqual(['cancelAction', 'confirmAction', 'countIncidents', 'generateReport', 'listQueue', 'listResources', 'openIncident', 'prepareIncidentUpdate', 'requestUpdate', 'showDashboard', 'showImpact', 'showResource']);
   });
   it('has its own prompt and greeting for IT engineers', () => {
     const p = buildSystemPrompt(NOW, 'itdesk');
@@ -231,6 +231,16 @@ describe('IT desk persona', () => {
     expect(p).toMatch(/picks one[^\n]*call openIncident/);
     expect(p).not.toMatch(/Read out only the first few items/);
     expect(p).toMatch(/showDashboard[^\n]*on hold[^\n]*resolved today[^\n]*oldest/);
+    const report = p.split('\n').find((l) => l.includes('generateReport')) ?? '';
+    expect(report).toMatch(/any report/i);
+    expect(report).toMatch(/"daily" or "today's report" is period today/);
+    expect(report).toMatch(/"yesterday's report" is yesterday/);
+    expect(report).toMatch(/"weekly" or "last 7 days" is last_7_days/);
+    expect(report).toMatch(/"this week" is this_week/);
+    expect(report).toMatch(/"monthly" is this_month/);
+    expect(report).toMatch(/Daily, weekly or monthly\?/);
+    expect(report).toMatch(/never guess/i);
+    expect(report).toMatch(/carry on/i);
     expect(p).not.toMatch(/Priya Sharma|checkServiceStatus|workday|copilot|okta/i);
     expect(buildGreeting(freshState(), 'itdesk')).toBe("Hi, I'm your IT Admin voice agent. How can I help?");
     expect(IT_INTRO).toMatch(/ServiceNow/);

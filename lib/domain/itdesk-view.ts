@@ -1,4 +1,5 @@
 import type { DeskIncident } from '@/lib/integrations/types';
+import { reportNames } from './report';
 import { missingOf } from './tools/itdesk';
 import type { SessionState } from './types';
 
@@ -30,6 +31,7 @@ export function buildItDeskView(state: SessionState, now: number) {
     lastUpdate: desk.lastUpdate,
     board: desk.board ?? null,
     updateRequest: desk.updateRequest ?? null,
+    report: desk.report ? { id: desk.report.id, status: desk.report.status, requestedAt: desk.report.requestedAt, filename: desk.report.filename ?? null, ...reportNames(desk.report.period) } : null,
     pending: waiting?.payload.kind === 'incident' ? { code: waiting.code, number: waiting.payload.number, summary: waiting.summary, changes: waiting.payload.changes, expiresAt: waiting.expiresAt } : null,
   };
 }

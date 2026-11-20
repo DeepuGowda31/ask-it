@@ -7,6 +7,7 @@ import { outageName } from './services';
 import { isOpen } from './tickets';
 import { verificationStatus } from './tools/identity';
 import { ITDESK_TOOLS } from './tools/itdesk';
+import { REPORT_TOOLS } from './tools/report';
 import type { LockdownStep, PendingAction, SessionEvent, SessionState, StepOutcome, TicketRecord } from './types';
 
 export interface Integrations {
@@ -119,7 +120,7 @@ function topIssues(state: SessionState, limit = 5) {
     .slice(0, limit);
 }
 
-const DESK_TOOLS = new Set(ITDESK_TOOLS.map((t) => t.name));
+const DESK_TOOLS = new Set([...ITDESK_TOOLS, ...REPORT_TOOLS].map((t) => t.name));
 
 const ticketRow = ({ sysId: _sysId, ...t }: TicketRecord, open: boolean) => ({ ...t, open });
 

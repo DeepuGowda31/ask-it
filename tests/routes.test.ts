@@ -57,7 +57,7 @@ describe('/api/state', () => {
     expect(body.call.active).toBe(false);
     expect(body.integrations).toEqual({ tickets: 'simulated', identity: 'simulated', notify: 'simulated', status: 'live' });
     expect(body.tickets).toHaveLength(2);
-    expect(body.itdesk).toEqual({ queue: [], current: null, lastUpdate: null, pending: null, board: null, updateRequest: null });
+    expect(body.itdesk).toEqual({ queue: [], current: null, lastUpdate: null, pending: null, board: null, updateRequest: null, report: null });
     expect(body.employee.email).toBe('p***@nimbuslabs.example');
     expect(body.account.email).toBe('p***@nimbuslabs.example');
     expect(JSON.stringify(body)).not.toMatch(/priya\.sharma@/);
@@ -253,7 +253,7 @@ describe('/api/mcp', () => {
     expect(list.result.tools).toHaveLength(toolsFor('employee').length);
     const desk = await (await mcpRoute(json(`http://localhost/api/mcp?session=${code}&persona=itdesk`, { jsonrpc: '2.0', id: 9, method: 'tools/list' }, { 'x-tool-secret': SECRET }))).json();
     expect(desk.result.tools.map((t: { name: string }) => t.name)).toContain('listQueue');
-    expect(desk.result.tools).toHaveLength(11);
+    expect(desk.result.tools).toHaveLength(12);
     expect(list.result.tools[0]).toHaveProperty('inputSchema');
 
     const call = await (await rpc(code, { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'listMyTickets', arguments: { status: '' } } })).json();
@@ -330,7 +330,7 @@ describe('/api/invite-agent', () => {
     expect((await invite(code, { persona: 'itdesk' })).status).toBe(200);
     const p = (bodies[0] as { properties: Record<string, any> }).properties; // eslint-disable-line @typescript-eslint/no-explicit-any
     expect(p.llm.template_variables).toEqual({ session_id: code, persona: 'itdesk' });
-    expect(p.llm.tools.map((t: { function: { name: string } }) => t.function.name).sort()).toEqual(['cancelAction', 'confirmAction', 'countIncidents', 'listQueue', 'listResources', 'openIncident', 'prepareIncidentUpdate', 'requestUpdate', 'showDashboard', 'showImpact', 'showResource']);
+    expect(p.llm.tools.map((t: { function: { name: string } }) => t.function.name).sort()).toEqual(['cancelAction', 'confirmAction', 'countIncidents', 'generateReport', 'listQueue', 'listResources', 'openIncident', 'prepareIncidentUpdate', 'requestUpdate', 'showDashboard', 'showImpact', 'showResource']);
     expect(p.llm.tools[0].server.body.persona).toBe('{{template_variables.persona}}');
     expect(p.llm.system_messages[0].content).toMatch(/^You are ASK IT on the Nimbus Labs IT desk/);
     expect(p.llm.greeting_message).toMatch(/^Hi, I'm your IT Admin voice agent/);

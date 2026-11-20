@@ -27,7 +27,7 @@ const NAME = /^[\p{L}][\p{L} .'-]{0,59}$/u;
 const STOP = new Set('the a an and or of on in for with about to is it that this one ones issue issues problem problems ticket tickets incident incidents'.split(' '));
 const MAX_WORDS = 4;
 
-function openedRange(opened: Opened, now: number): { since: number; before?: number } {
+export function openedRange(opened: Opened, now: number): { since: number; before?: number } {
   const today = zonedTime(isoDate(now), 0);
   const yesterday = zonedTime(isoDate(today - 1), 0);
   const weekday = new Date(`${isoDate(now)}T00:00:00Z`).getUTCDay();

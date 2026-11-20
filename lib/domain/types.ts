@@ -1,6 +1,7 @@
 import type { Dashboard } from './dashboard';
 import type { AccountAction, CardStatus, CardUpdate, Channel, DeskIncident, Level, Mode, NewTicket, OpenTicket, Resource, WorkNote } from '@/lib/integrations/types';
 import type { DiagnosticFocus, DiagnosticResults, Finding } from './diagnose';
+import type { ReportPeriod } from './report';
 
 // Who the call is for; set by the server when the call starts, never by the model.
 export type Persona = 'employee' | 'itdesk';
@@ -263,6 +264,18 @@ type DeskBoard =
   | { kind: 'people'; title: string; status: ResourceStatus; available: number; busy: number; people: PersonCard[]; at: number }
   | { kind: 'person'; person: PersonCard; at: number };
 
+// A report the engineer asked for: the IT page builds and downloads it, then it is ready or failed.
+// `startedAt` is when a request claimed the build, so two tabs never build it twice.
+export interface ReportRequest {
+  id: string;
+  period: ReportPeriod;
+  requestedAt: number;
+  status: 'pending' | 'ready' | 'failed';
+  startedAt?: number;
+  finishedAt?: number;
+  filename?: string;
+}
+
 interface ItDesk {
   // The last list read out, so "the second one" can be resolved.
   queue: DeskIncident[];
@@ -274,6 +287,8 @@ interface ItDesk {
   backlog: OpenIncident[];
   // Missing in sessions saved before boards existed.
   board?: DeskBoard | null;
+  // The last report asked for; missing in sessions saved before reports existed.
+  report?: ReportRequest | null;
 }
 
 export interface SessionEvent {

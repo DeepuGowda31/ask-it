@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Brand } from './Brand';
-import { CallPanel, LiveIncident } from './ItDesk';
+import { CallPanel, LiveIncident, ReportCard } from './ItDesk';
 import { Results } from './Results';
 import { CallMount } from './VoiceCall';
 import type { SessionView } from '@/lib/domain/view';
@@ -10,6 +10,7 @@ import { alertProblem, formatCountdown, introDue } from '@/lib/client/helpers';
 import { ticketCatalog } from '@/lib/client/right-now';
 import { pickSessionCode } from '@/lib/client/session-code';
 import { useDeskRefresh } from '@/lib/client/useDeskRefresh';
+import { useReport } from '@/lib/client/useReport';
 import { useNow, useSessionState } from '@/lib/client/useSessionState';
 import { useVoiceCall } from '@/lib/client/useVoiceCall';
 
@@ -64,6 +65,8 @@ export default function ItDashboard({ initialCode }: { initialCode: string }) {
   const catalog = useMemo(() => (view ? ticketCatalog(view, view.itdesk) : new Map()), [view]);
   // An incident card or a board on screen is read again from ServiceNow, so edits made there show up.
   useDeskRefresh(code, Boolean(view?.itdesk.current || view?.itdesk.board));
+  // A report the agent recorded is built by the server and downloads here by itself.
+  const report = useReport(code, view?.itdesk.report ?? null);
   // A few quiet seconds after the greeting bring the short intro; the server says it at most once per call.
   const introReady = call.phase === 'live' && introDue(call.transcript, call.signalState);
   useEffect(() => {
@@ -163,6 +166,7 @@ export default function ItDashboard({ initialCode }: { initialCode: string }) {
         <div className="wc-stage">
           {status === 'error' ? <p className="wc-notice wc-notice-warn" role="status">Connection lost. Showing the last known state while retrying…</p> : null}
           <LiveIncident desk={view.itdesk} now={now} />
+          {view.itdesk.report ? <ReportCard key={view.itdesk.report.id} report={view.itdesk.report} now={now} onDownload={report.downloadAgain} busy={report.busy} /> : null}
           {board ? <section key={board.at} className="wc-board wc-enter" aria-live="polite"><Results view={view} now={now} /></section> : <Welcome live={view.integrations.tickets === 'live'} />}
         </div>
         <CallPanel call={call} now={now} catalog={catalog} />

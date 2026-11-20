@@ -23,7 +23,7 @@ const update = (state: SessionState, changes: Partial<typeof NO_CHANGES> & { tic
 
 describe('IT desk persona tools', () => {
   it('are separate from the employee tools', () => {
-    expect(toolsFor('itdesk').map((t) => t.name).sort()).toEqual(['cancelAction', 'confirmAction', 'countIncidents', 'listQueue', 'listResources', 'openIncident', 'prepareIncidentUpdate', 'requestUpdate', 'showDashboard', 'showImpact', 'showResource']);
+    expect(toolsFor('itdesk').map((t) => t.name).sort()).toEqual(['cancelAction', 'confirmAction', 'countIncidents', 'generateReport', 'listQueue', 'listResources', 'openIncident', 'prepareIncidentUpdate', 'requestUpdate', 'showDashboard', 'showImpact', 'showResource']);
     const employee = toolsFor('employee').map((t) => t.name);
     expect(employee).toHaveLength(21);
     expect(employee).not.toContain('listQueue');

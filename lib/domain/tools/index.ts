@@ -4,13 +4,14 @@ import { fail, type Args, type Deps, type ToolDef } from './shared';
 import { SUPPORT_TOOLS } from './support';
 import { TICKET_TOOLS } from './ticketing';
 import { ITDESK_TOOLS } from './itdesk';
+import { REPORT_TOOLS } from './report';
 import { WRAPUP_TOOLS } from './wrapup';
 import { FOLLOW_UP_TOOLS } from './followup';
 import { DIAGNOSTICS_TOOLS } from './diagnostics';
 import type { Alert, Persona, SessionState, ToolResult } from '../types';
 
 // One registry for Agora tools, MCP and the route; every param is a required string, "" means not given.
-export const TOOLS: ToolDef[] = [...SUPPORT_TOOLS, ...IDENTITY_TOOLS, ...TICKET_TOOLS, ...ACTION_TOOLS, ...DIAGNOSTICS_TOOLS, ...FOLLOW_UP_TOOLS, ...WRAPUP_TOOLS, ...ITDESK_TOOLS];
+export const TOOLS: ToolDef[] = [...SUPPORT_TOOLS, ...IDENTITY_TOOLS, ...TICKET_TOOLS, ...ACTION_TOOLS, ...DIAGNOSTICS_TOOLS, ...FOLLOW_UP_TOOLS, ...WRAPUP_TOOLS, ...ITDESK_TOOLS, ...REPORT_TOOLS];
 
 const BY_NAME = new Map(TOOLS.map((t) => [t.name.toLowerCase(), t]));
 export const getTool = (name: string) => BY_NAME.get(name.toLowerCase());

@@ -4,7 +4,7 @@ import { NOW, call, freshState } from './helpers';
 
 describe('IT desk view', () => {
   it('is empty until the desk is used', () => {
-    expect(buildItDeskView(freshState(), NOW)).toEqual({ queue: [], current: null, lastUpdate: null, pending: null, board: null, updateRequest: null });
+    expect(buildItDeskView(freshState(), NOW)).toEqual({ queue: [], current: null, lastUpdate: null, pending: null, board: null, updateRequest: null, report: null });
   });
   it('shows the queue, the open incident and the waiting update without internal ids', async () => {
     let s = (await call(freshState(), 'listQueue', { priority: 'critical', state: '', assignee: '', group: '', category: '', opened: '', keyword: '', sort: '', limit: '' })).state;
@@ -24,5 +24,12 @@ describe('IT desk view update requests', () => {
   it('shows the last update asked of an assignee', async () => {
     const s = (await call(freshState(), 'requestUpdate', { ticket: '13002', within: '3 minutes' })).state;
     expect(buildItDeskView(s, NOW).updateRequest).toEqual({ number: 'INC0013002', assignee: 'Karthik Nair', due: NOW + 3 * 60_000, at: NOW });
+  });
+});
+
+describe('IT desk view reports', () => {
+  it('shows the report asked for, named for the screen', async () => {
+    const s = (await call(freshState(), 'generateReport', { period: 'last_7_days' }, { claim: 'r1' })).state;
+    expect(buildItDeskView(s, NOW).report).toEqual({ id: 'r1', status: 'pending', requestedAt: NOW, filename: null, kind: 'Weekly', periodLabel: 'Last 7 days' });
   });
 });

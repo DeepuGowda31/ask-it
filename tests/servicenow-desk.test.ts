@@ -70,6 +70,24 @@ describe('ServiceNow desk activity', () => {
   });
 });
 
+describe('ServiceNow desk resolutions', () => {
+  it('reads incidents resolved since a moment, newest first, with when each was resolved', async () => {
+    const { desk: d, calls } = desk(() => jsonResponse({ result: [{ ...ROW, state: v('6', 'Resolved'), resolved_at: v('2026-11-17 10:00:00', '2026-11-17 15:30:00') }, { ...ROW, number: v('INC0010102'), sys_id: v(USER), state: v('7', 'Closed'), resolved_at: v('') }] }));
+    expect(await d.resolvedSince(NOW - 7 * DAY, 501)).toEqual({
+      ok: true,
+      value: [
+        { ...INCIDENT, state: '6', stateLabel: 'Resolved', resolvedAt: Date.UTC(2026, 10, 17, 10) },
+        { ...INCIDENT, number: 'INC0010102', sysId: USER, state: '7', stateLabel: 'Closed', resolvedAt: null },
+      ],
+    });
+    expect(query(calls[0].url)).toEqual({ sysparm_query: 'resolved_at>=javascript:gs.minutesAgoStart(10080)^ORDERBYDESCresolved_at', sysparm_fields: `${FIELDS},resolved_at`, sysparm_display_value: 'all', sysparm_limit: '501' });
+  });
+  it('fails when ServiceNow does', async () => {
+    const { desk: d } = desk(() => jsonResponse({ error: 'x' }, 500));
+    expect(await d.resolvedSince(NOW - DAY, 10)).toMatchObject({ ok: false, error: { kind: 'unavailable' } });
+  });
+});
+
 describe('ServiceNow desk queue', () => {
   it.each([
     [{}, ''],

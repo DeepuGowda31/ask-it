@@ -71,7 +71,7 @@ export interface DeskIncident {
   urgency: Level;
   impact: Level;
   openedAt: number | null;
-  // Simulated desk only: when it was resolved, for the dashboard.
+  // When it was resolved: the simulated desk, and live rows read by resolvedSince.
   resolvedAt?: number | null;
 }
 
@@ -125,6 +125,8 @@ export interface DeskAdapter {
   roster(teams: readonly string[]): Promise<Result<Resource[]>>;
   // When incidents were opened and resolved since a moment, for the dashboard's daily bars.
   activity(since: number): Promise<Result<Activity>>;
+  // Incidents resolved since a moment, newest first, each with resolvedAt.
+  resolvedSince(since: number, limit: number): Promise<Result<DeskIncident[]>>;
   update(sysId: string, fields: Record<string, string>): Promise<Result<DeskIncident>>;
 }
 

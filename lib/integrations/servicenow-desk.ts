@@ -194,6 +194,21 @@ export class ServiceNowDesk implements DeskAdapter {
     });
   }
 
+  async resolvedSince(since: number, limit: number): Promise<Result<DeskIncident[]>> {
+    const res = await this.rows('incident', {
+      sysparm_query: `resolved_at>=${this.minutesAgo(since)}^ORDERBYDESCresolved_at`,
+      sysparm_fields: `${FIELDS},resolved_at`,
+      sysparm_display_value: 'all',
+      sysparm_limit: String(limit),
+    });
+    if (!res.ok) return res;
+    const list = res.value.map((row): DeskIncident | null => {
+      const i = toIncident(row);
+      return i && isRecord(row) ? { ...i, resolvedAt: parseTime(part(row, 'resolved_at', 'value')) } : null;
+    });
+    return list.every((x): x is DeskIncident => x !== null) ? success(list) : failure({ kind: 'bad_response' });
+  }
+
   async roster(teams: readonly string[]): Promise<Result<Resource[]>> {
     if (!teams.length || !teams.every((t) => TEAM.test(t))) return rejected();
     const members = await this.rows('sys_user_grmember', {

@@ -1,6 +1,6 @@
 'use client';
 
-import { BellRing, Check, Mic } from 'lucide-react';
+import { BellRing, Check, Download, FileText, Mic, TriangleAlert } from 'lucide-react';
 import { BrandMark } from './Brand';
 import { Transcript } from './Transcript';
 import { CallBanners, CallDock, CallSignal } from './VoiceCall';
@@ -88,6 +88,30 @@ export function LiveIncident({ desk, now }: { desk: Desk; now: number }) {
         </p>
       ) : null}
       {note && !pending ? <p className="wc-faint truncate text-[12px]" title={note.text}>Last note{note.at ? ` at ${timeOfDay(note.at)}` : ''}<span className="wc-muted ml-2">{note.text}</span></p> : null}
+    </section>
+  );
+}
+
+type Report = NonNullable<Desk['report']>;
+// The server stops waiting for a pending report after two minutes, so a new one can be asked for.
+const REPORT_WAIT_MS = 2 * 60_000;
+
+// The report the engineer asked for: being put together, ready with a fallback download, or not built.
+export function ReportCard({ report, now, onDownload, busy }: { report: Report; now: number; onDownload: () => void; busy: boolean }) {
+  const kind = report.kind.toLowerCase();
+  const stalled = report.status === 'pending' && now - report.requestedAt >= REPORT_WAIT_MS;
+  const tone = report.status === 'failed' || stalled ? 'bad' : report.status === 'ready' ? 'ok' : 'busy';
+  const Icon = tone === 'bad' ? TriangleAlert : tone === 'ok' ? Check : FileText;
+  const title = tone === 'bad' ? `Couldn't build the ${kind} report` : tone === 'ok' ? `${report.kind} report ready` : `Putting together your ${kind} report`;
+  const detail = tone === 'bad' ? 'Ask ASK IT for it again' : tone === 'ok' ? (report.filename ?? report.periodLabel) : `${report.periodLabel} · it downloads in a few seconds`;
+  return (
+    <section className="wc-report wc-enter" data-tone={tone} role="status" aria-label={title}>
+      <Icon size={16} className="flex-none" aria-hidden="true" />
+      <span className="min-w-0">
+        <strong className="block truncate">{title}</strong>
+        <span className="wc-muted block truncate text-[12px]" title={detail}>{detail}</span>
+      </span>
+      {tone === 'ok' ? <button className="wc-btn ml-auto flex-none" onClick={onDownload} disabled={busy}><Download size={14} aria-hidden="true" /> Download again</button> : null}
     </section>
   );
 }

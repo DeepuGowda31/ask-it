@@ -5,7 +5,7 @@ import { NOW, call, freshState } from './helpers';
 describe('tool registry', () => {
   it('fits Agora: valid names, at most 32 tools per call, all params required strings', () => {
     expect(toolsFor('employee').length).toBeLessThanOrEqual(32);
-    expect(TOOLS).toHaveLength(30);
+    expect(TOOLS).toHaveLength(31);
     expect(toolsFor('itdesk').length).toBeLessThanOrEqual(32);
     expect(toolsFor('employee').map((t) => t.name).sort()).toEqual(
       [
