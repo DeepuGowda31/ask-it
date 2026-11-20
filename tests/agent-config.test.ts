@@ -108,16 +108,14 @@ describe('prompt and greeting', () => {
     expect(buildGreeting(s, 'employee', { number: 'INC0010013', summary: 'VPN down' })).toMatch(/calling about I-N-C one zero zero one three/);
     expect(buildGreeting(s, 'employee', { number: '', summary: 'the VPN fix', reminder: 'RM-1' })).toBe("Hi Deepak, it's ASK IT checking back about the VPN fix. Is it working now?");
   });
-  it('briefs the agent with their open tickets from the first turn, without a rundown', () => {
+  it('keeps tickets out of the prompt, so showing them always goes through listMyTickets', () => {
     const p = buildSystemPrompt(NOW, 'employee', null, null, freshState().tickets);
-    expect(p).toMatch(/Deepak's open tickets\n- Do not open with a rundown of tickets\..*\n- INC0011994, Figma licence request: in progress, low urgency\./);
-    expect(p).toMatch(/Do not open with a rundown of tickets/);
-    expect(p).not.toMatch(/INC0011987/);
-    expect(buildSystemPrompt(NOW)).toMatch(/Deepak's open tickets\n.*\n- None right now\./);
-    const many = Array.from({ length: 8 }, (_, i) => ({ ...freshState().tickets[0], number: `INC00200${i}`, summary: `Issue\n${i}` }));
-    const listed = buildSystemPrompt(NOW, 'employee', null, null, many).match(/^- INC00200/gm) ?? [];
-    expect(listed).toHaveLength(5);
-    expect(buildSystemPrompt(NOW, 'employee', null, null, many)).toMatch(/INC002000, Issue 0:/);
+    expect(p).not.toMatch(/INC0011994|Figma licence request/);
+    expect(p).toMatch(/Their tickets\n- They are not in this prompt\. Whenever Deepak asks to see, list or check their tickets, call listMyTickets/);
+    expect(p).toMatch(/only after it returns say they're on the screen/);
+  });
+  it('never turns away a device other than the laptop on file', () => {
+    expect(buildSystemPrompt(NOW)).toMatch(/Help with any device Deepak names, Windows, Mac, phone or printer; never send them elsewhere/);
   });
   it('briefs a reminder call', () => {
     const p = buildSystemPrompt(NOW, 'employee', { number: 'INC0011994', summary: 'the Figma licence', reminder: 'RM-1' });

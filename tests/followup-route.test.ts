@@ -330,7 +330,7 @@ describe('greeting at call start', () => {
     expect((await invite(code)).status).toBe(200);
     const llm = bodies[0].properties.llm;
     expect(llm.greeting_message).toBe('Hi Deepak, ASK IT here.');
-    expect(llm.system_messages[0].content).toMatch(/Deepak's open tickets\n.*\n- INC0011994, Figma licence request: in progress, low urgency\./);
+    expect(llm.system_messages[0].content).toMatch(/Their tickets\n- They are not in this prompt/);
     expect(llm.system_messages[0].content).toMatch(/Call opener\n- If Deepak stays quiet after your greeting, you add: "I'm here to help you sort out any IT issue\. What's going on\?\"/);
     expect((await view(code)).call.opener).toBe("I'm here to help you sort out any IT issue. What's going on?");
   });

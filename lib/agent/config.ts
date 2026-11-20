@@ -2,7 +2,7 @@ import type { LlmTool, MurfTTSOptions } from 'agora-agents';
 import { toolJsonSchema, toolsFor } from '@/lib/domain/tools';
 import { COMPANY, EMPLOYEE } from '@/lib/domain/company';
 import { formatTime, isoDate, longDate } from '@/lib/domain/time';
-import { clip, echo, isOpen, spokenTicket } from '@/lib/domain/tickets';
+import { clip, echo, spokenTicket } from '@/lib/domain/tickets';
 import { findAsset, type Asset } from '@/lib/domain/assets';
 import type { Opener } from '@/lib/domain/opener';
 import type { AssetVisit, FollowUp, Persona, SessionState, TicketRecord } from '@/lib/domain/types';
@@ -136,18 +136,12 @@ function callSection(callBack: CallBack | null, visit: AssetVisit | null) {
   return a && visit ? assetPrompt(a, visit) : '';
 }
 
-const URGENCY_WORD: Record<number, string> = { 1: 'high', 2: 'medium', 3: 'low' };
-const MAX_PROMPT_TICKETS = 5;
-
-// Their open tickets as the session knew them when the call started.
-function ticketsSection(tickets: TicketRecord[]) {
-  const open = tickets.filter(isOpen).slice(0, MAX_PROMPT_TICKETS);
-  const lines = open.length ? open.map((t) => `- ${t.number}, ${echo(t.summary, 100)}: ${t.state.toLowerCase()}, ${URGENCY_WORD[t.urgency] ?? 'unknown'} urgency.`) : ['- None right now.'];
+// Tickets stay out of the prompt: listing them always goes through the tool, which is what puts them on screen.
+function ticketsSection() {
   return `
 
-${EMPLOYEE.firstName}'s open tickets
-- Do not open with a rundown of tickets. Bring one up only when they ask about their tickets or it matches the problem they describe.
-${lines.join('\n')}`;
+Their tickets
+- They are not in this prompt. Whenever ${EMPLOYEE.firstName} asks to see, list or check their tickets, call listMyTickets, every time, even if you listed them earlier; the screen shows them only after that call, so only after it returns say they're on the screen, and never read them one by one. For one ticket's status or owner, call getTicketDetails.`;
 }
 
 // How to follow up on what the opener asked.
@@ -167,10 +161,10 @@ Call opener
 - If ${EMPLOYEE.firstName} stays quiet after your greeting, you add: "${o.say}"${OPENER_NEXT[o.kind](o)} Otherwise just answer what they ask.`
     : '';
 
-export function buildSystemPrompt(now: number, persona: Persona = 'employee', callBack: CallBack | null = null, asset: AssetVisit | null = null, tickets: TicketRecord[] = [], opener: Opener | null = null): string {
+export function buildSystemPrompt(now: number, persona: Persona = 'employee', callBack: CallBack | null = null, asset: AssetVisit | null = null, _tickets: TicketRecord[] = [], opener: Opener | null = null): string {
   if (persona === 'itdesk') return itDeskPrompt(now);
   const e = EMPLOYEE;
-  return `You are ASK IT, the voice IT helpdesk of ${COMPANY} in Bengaluru. You are talking with ${e.name}, ${e.role}. ${e.firstName}'s laptop is ${e.device.id}, a ${e.device.model} on ${e.device.os}, with the ${e.vpnClient} VPN client. It is ${longDate(isoDate(now))}, ${formatTime(now)} India time.
+  return `You are ASK IT, the voice IT helpdesk of ${COMPANY} in Bengaluru. You are talking with ${e.name}, ${e.role}. ${e.firstName}'s laptop is ${e.device.id}, a ${e.device.model} on ${e.device.os}, with the ${e.vpnClient} VPN client. That is only their usual laptop: Help with any device ${e.firstName} names, Windows, Mac, phone or printer; never send them elsewhere. If a guide does not fit their device, give general steps and offer to raise a ticket. It is ${longDate(isoDate(now))}, ${formatTime(now)} India time.
 
 How you speak
 - Spoken replies only: plain sentences. No markdown, no lists, no headings, no emojis, no asterisks, no brackets.
@@ -199,7 +193,7 @@ Follow up
 - After a change, say in one sentence what changed and the next step.
 - confirmFix records whether a fix IT made works: fixed closes the ticket, not_fixed reopens it at high urgency with their words. Their answer is the confirmation; never ask for another yes.
 - After you raise a ticket or finish a fix, offer one reminder, such as "Shall I check back with you tomorrow morning?". If they want it, call scheduleReminder with the time in their words, what it is about and the ticket, if any, then read the time back. Offer a reminder at most once per call. It needs no confirmation code.
-- When ${e.firstName} is done, call wrapUpCall and give its short summary.${ticketsSection(tickets)}${openerSection(callBack || asset ? null : opener)}${callSection(callBack, asset)}`;
+- When ${e.firstName} is done, call wrapUpCall and give its short summary.${ticketsSection()}${openerSection(callBack || asset ? null : opener)}${callSection(callBack, asset)}`;
 }
 
 // Said once, only if the engineer stays quiet a few seconds after the greeting.
