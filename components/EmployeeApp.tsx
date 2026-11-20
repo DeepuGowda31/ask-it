@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, MapPin, Mic, RotateCcw } from 'lucide-react';
-import { Brand } from './Brand';
+import { Brand, BrandMark } from './Brand';
 import { Drawer } from './Drawer';
 import { DocumentView } from './DocumentView';
 import { Transcript } from './Transcript';
@@ -128,7 +128,7 @@ export default function EmployeeApp({ setupWarning }: { setupWarning: string | n
   const asset = view?.asset ?? null;
 
   const header = (
-    <header className="wc-header">
+    <header className="wc-header wc-header-compact">
       <a className="wc-skip" href="#main-content">Skip to main content</a>
       <Brand subtitle="Voice IT helpdesk" />
       <nav className="wc-nav" aria-label="Tools">
@@ -162,7 +162,7 @@ export default function EmployeeApp({ setupWarning }: { setupWarning: string | n
   );
 
   return (
-    <div className="min-h-dvh" data-call={inCall || undefined}>
+    <div className="wc-it wc-emp" data-call={inCall || undefined}>
       {header}
       {setupWarning && !inCall ? (
         <div className="mx-auto max-w-[1200px] px-4 md:px-10">
@@ -187,7 +187,7 @@ export default function EmployeeApp({ setupWarning }: { setupWarning: string | n
               <p className="wc-asset-place"><MapPin size={14} aria-hidden="true" /> {asset.location}</p>
               {asset.ticket ? (
                 <p className="wc-notice wc-notice-warn wc-asset-reported" role="note">
-                  Already reported as <span className="wc-mono">{asset.ticket.number}</span>: {asset.ticket.summary}. Your report will be added to it.
+                  Already reported as <span className="wc-mono">{asset.ticket.number}</span> ({asset.ticket.summary}). Your report will be added to it.
                 </p>
               ) : null}
             </div>
@@ -203,50 +203,49 @@ export default function EmployeeApp({ setupWarning }: { setupWarning: string | n
           <aside className="wc-signal-area" aria-label="Call status"><CallSignal call={call} /></aside>
           {side}
         </main>
-      ) : !inCall ? (
-        <main id="main-content" className="wc-workspace wc-workspace-ready">
-          <section className="wc-welcome wc-enter">
-            <h2>ASK IT</h2>
-            <p className="wc-lead">Tell IT what&apos;s wrong. Most issues get fixed on the call.</p>
-            <div className="mb-3 mt-7 flex flex-wrap items-center gap-3">
-              <button className="wc-btn wc-btn-primary wc-btn-lg" onClick={() => call.startCall(false)} disabled={!code}>
-                <Mic size={18} aria-hidden="true" /> Talk to IT
-              </button>
-              {call.canTakeOver ? (
-                <button className="wc-btn wc-btn-lg" onClick={() => call.startCall(true)}>Take over the other call</button>
-              ) : null}
-            </div>
-            {call.error ? <p className="wc-notice wc-notice-bad mt-4" role="alert">{call.error}</p> : null}
-          </section>
-          <aside className="wc-signal-area" aria-label="Call status"><CallSignal call={call} /></aside>
-          {side}
-        </main>
       ) : (
-        <main id="main-content" className="wc-workspace wc-workspace-session">
-          <section className="wc-main wc-session" aria-label="Voice conversation">
-            <div className="wc-session-heading">
-              <h2>Conversation</h2>
-              <div className="wc-session-meta">
-                {phase === 'live' && deadline ? (
-                  <span className="wc-num" data-urgent={left < 60_000}>Session ends in {formatCountdown(left)}</span>
-                ) : null}
-                <span className="wc-status" data-tone={status.tone} role="status">
-                  <span className="wc-dot" aria-hidden="true" /> {status.label}
-                </span>
+        <main id="main-content" className="wc-it-main wc-emp-main">
+          <section className="wc-call-col" aria-label={inCall ? 'Voice conversation' : 'Start a call'}>
+            {inCall ? (
+              <>
+                <div className="wc-emp-callhead">
+                  <span className="wc-status" data-tone={status.tone} role="status"><span className="wc-dot" aria-hidden="true" /> {status.label}</span>
+                  {phase === 'live' && deadline ? <span className="wc-num wc-faint" data-urgent={left < 60_000}>Ends in {formatCountdown(left)}</span> : null}
+                </div>
+                <div className="wc-emp-signal" aria-hidden="true"><CallSignal call={call} /></div>
+                <CallBanners call={call} />
+                <Transcript
+                  catalog={catalog}
+                  attached={attached}
+                  messages={transcript}
+                  placeholder={phase === 'connecting' ? 'Connecting you to ASK IT…' : phase === 'ended' ? 'No conversation was recorded.' : "Say hello, then tell IT what's wrong."}
+                />
+                <CallDock call={call} endedText={`Call ended${view?.call.endedAt ? ` at ${timeOfDay(view.call.endedAt)}` : ''}.`} onRestart={() => call.startCall(false)} />
+              </>
+            ) : (
+              <div className="wc-desk-idle">
+                <BrandMark className="wc-desk-mark" />
+                <h2 className="wc-desk-title">IT Help</h2>
+                <p className="wc-muted">Talk to fix it now. Nothing changes until you say yes.</p>
+                <button className="wc-btn wc-btn-primary wc-btn-lg w-full" onClick={() => call.startCall(false)} disabled={!code}>
+                  <Mic size={18} aria-hidden="true" /> Talk to ASK IT
+                </button>
+                {call.canTakeOver ? <button className="wc-btn wc-btn-lg w-full" onClick={() => call.startCall(true)}>Take over the other call</button> : null}
+                {call.error ? <p className="wc-notice wc-notice-bad" role="alert">{call.error}</p> : null}
               </div>
-            </div>
-            <CallBanners call={call} />
-            <Transcript
-              catalog={catalog}
-              attached={attached}
-              messages={transcript}
-              placeholder={phase === 'connecting' ? 'Connecting you to ASK IT…' : phase === 'ended' ? 'No conversation was recorded.' : "Say hello, then tell IT what's wrong."}
-            />
-            <CallDock call={call} endedText={`Call ended${view?.call.endedAt ? ` at ${timeOfDay(view.call.endedAt)}` : ''}.`} onRestart={() => call.startCall(false)} />
+            )}
           </section>
-          <aside className="wc-signal-area" aria-label="Call status"><CallSignal call={call} /></aside>
-          {side}
-          <CallMount call={call} />
+          <div className="wc-stage">
+            {!inCall ? (
+              <section className="wc-welcome-it wc-enter" aria-label="Welcome">
+                <p className="wc-eyebrow" data-live={view?.integrations.tickets === 'live'}><span className="wc-dot" aria-hidden="true" />{view?.integrations.tickets === 'live' ? 'Live on ServiceNow' : 'Simulated ServiceNow'}</p>
+                <h2>Hi {view?.employee.firstName ?? 'there'}, I&apos;m ASK IT. Tell me what&apos;s wrong.</h2>
+                <p>Most issues get fixed right on the call. Anything that needs a person becomes a ticket you can follow here.</p>
+              </section>
+            ) : null}
+            {side}
+          </div>
+          {inCall ? <CallMount call={call} /> : null}
         </main>
       )}
 
