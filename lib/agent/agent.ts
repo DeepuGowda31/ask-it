@@ -10,11 +10,16 @@ export function agoraClient(env: Env = process.env) {
   return new AgoraClient({ area: Area.US, appId: env.NEXT_PUBLIC_AGORA_APP_ID!, appCertificate: env.NEXT_AGORA_APP_CERTIFICATE! });
 }
 
-// Has a running agent say one line, only if it is not already talking or listening to someone.
-export async function speakWhenIdle(agentId: string, text: string, env: Env = process.env) {
+async function speak(agentId: string, text: string, priority: 'IGNORE' | 'APPEND', env: Env) {
   const token = generateConvoAIToken({ appId: env.NEXT_PUBLIC_AGORA_APP_ID!, appCertificate: env.NEXT_AGORA_APP_CERTIFICATE!, channelName: 'speak', uid: 0 });
-  await agoraClient(env).agents.speak({ appid: env.NEXT_PUBLIC_AGORA_APP_ID!, agentId, text, priority: 'IGNORE', interruptable: true }, { headers: { Authorization: `agora token=${token}` } });
+  await agoraClient(env).agents.speak({ appid: env.NEXT_PUBLIC_AGORA_APP_ID!, agentId, text, priority, interruptable: true }, { headers: { Authorization: `agora token=${token}` } });
 }
+
+// Has a running agent say one line, only if it is not already talking or listening to someone.
+export const speakWhenIdle = (agentId: string, text: string, env: Env = process.env) => speak(agentId, text, 'IGNORE', env);
+
+// Has a running agent say one line as soon as it finishes what it is saying now.
+export const speakNext = (agentId: string, text: string, env: Env = process.env) => speak(agentId, text, 'APPEND', env);
 
 export function createAskItSession(opts: {
   client: AgoraClient;

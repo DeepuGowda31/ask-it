@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import { speakWhenIdle } from '@/lib/agent/agent';
+import { speakNext } from '@/lib/agent/agent';
 import { claimReport, finishReport, reportFailedLine, reportFilename, reportReadyLine } from '@/lib/domain/report';
 import type { SessionState } from '@/lib/domain/types';
 import { buildDeps } from '@/lib/server/deps';
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     }
     const line = built.ok ? reportReadyLine(period) : reportFailedLine(period, desk.mode === 'live' && built.why === 'read');
     const speaker = agentId;
-    if (speaker) later(() => speakWhenIdle(speaker, line));
+    if (speaker) later(() => speakNext(speaker, line));
   }
 
   if (!built.ok) return reply({ error: 'report_unavailable' }, 502);

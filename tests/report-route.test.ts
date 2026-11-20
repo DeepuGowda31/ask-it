@@ -42,7 +42,8 @@ function network(serviceNow = 500) {
     if (url.includes('/join')) return new Response(JSON.stringify({ agent_id: 'agent-it' }), { status: 200, headers: { 'content-type': 'application/json' } });
     return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
   });
-  return { calls, speeches: () => calls.filter((c) => c.url.includes('/agents/agent-it/speak')).map((c) => (c.body as { text: string }).text) };
+  const spoken = () => calls.filter((c) => c.url.includes('/agents/agent-it/speak')).map((c) => c.body as { text: string; priority: string });
+  return { calls, speeches: () => spoken().map((b) => b.text), priorities: () => spoken().map((b) => b.priority) };
 }
 
 async function session(itCall = true) {
@@ -89,6 +90,8 @@ describe('/api/itdesk/report', () => {
     expect(doc.getPageCount()).toBeGreaterThanOrEqual(2);
     expect((await stateOf(code)).itdesk.report).toMatchObject({ id: report.id, status: 'ready', filename: expect.stringMatching(/^ASK IT Monthly/) });
     await vi.waitFor(() => expect(net.speeches()).toEqual([reportReadyLine('this_month')]));
+    // Queued behind the line the agent is still saying, never dropped.
+    expect(net.priorities()).toEqual(['APPEND']);
     // Downloading it again rebuilds the file and says nothing.
     const again = await post({ session: code, id: report.id });
     expect(again.status).toBe(200);
@@ -126,6 +129,7 @@ describe('/api/itdesk/report', () => {
     expect(net.calls.some((c) => c.url.includes('servicenow.example'))).toBe(true);
     expect((await stateOf(code)).itdesk.report).toMatchObject({ id: report.id, status: 'failed' });
     await vi.waitFor(() => expect(net.speeches()).toEqual([reportFailedLine('today', true)]));
+    expect(net.priorities()).toEqual(['APPEND']);
     const again = await post({ session: code, id: report.id });
     expect(again.status).toBe(409);
     expect(await again.json()).toEqual({ error: 'report_failed' });
