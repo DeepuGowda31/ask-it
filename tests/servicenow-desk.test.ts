@@ -55,11 +55,14 @@ describe('ServiceNow desk activity', () => {
   it('reads when incidents were opened and resolved in the last days', async () => {
     const { desk: d, calls } = desk((url) => (new URL(url).searchParams.get('sysparm_fields') === 'opened_at'
       ? jsonResponse({ result: [{ opened_at: '2026-11-18 03:00:00' }, { opened_at: 'nonsense' }] })
-      : jsonResponse({ result: [{ resolved_at: '2026-11-17 10:00:00' }] })));
-    expect(await d.activity(NOW - 7 * DAY)).toEqual({ ok: true, value: { opened: [Date.UTC(2026, 10, 18, 3)], resolved: [Date.UTC(2026, 10, 17, 10)] } });
+      : jsonResponse({ result: [{ resolved_at: '2026-11-17 10:00:00', opened_at: '2026-11-16 22:00:00' }, { resolved_at: '2026-11-17 11:00:00', opened_at: '' }, { resolved_at: 'x' }] })));
+    expect(await d.activity(NOW - 7 * DAY)).toEqual({
+      ok: true,
+      value: { opened: [Date.UTC(2026, 10, 18, 3)], resolved: [{ at: Date.UTC(2026, 10, 17, 10), openedAt: Date.UTC(2026, 10, 16, 22) }, { at: Date.UTC(2026, 10, 17, 11), openedAt: null }] },
+    });
     const queries = calls.map((c) => query(c.url));
     expect(queries[0]).toEqual({ sysparm_query: 'opened_at>=javascript:gs.minutesAgoStart(10080)', sysparm_fields: 'opened_at', sysparm_limit: '1000' });
-    expect(queries[1]).toEqual({ sysparm_query: 'resolved_at>=javascript:gs.minutesAgoStart(10080)', sysparm_fields: 'resolved_at', sysparm_limit: '1000' });
+    expect(queries[1]).toEqual({ sysparm_query: 'resolved_at>=javascript:gs.minutesAgoStart(10080)', sysparm_fields: 'resolved_at,opened_at', sysparm_limit: '1000' });
   });
   it('fails when either read fails', async () => {
     const { desk: d } = desk((url) => (new URL(url).searchParams.get('sysparm_fields') === 'opened_at' ? jsonResponse({ result: [] }) : jsonResponse({ error: 'x' }, 503)));

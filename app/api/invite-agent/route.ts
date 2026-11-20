@@ -4,7 +4,7 @@ import { SESSION_MAX_SECONDS, missingEnv, resolvePublicBaseUrl } from '@/lib/age
 import { getStore } from '@/lib/server/store';
 import { SessionNotFoundError, isValidSessionCode, loadSession, normalizeSessionCode, updateSession } from '@/lib/server/session';
 import { answerFollowUp, isRinging, ringId } from '@/lib/domain/followup';
-import { refreshTickets } from '@/lib/server/followup';
+import { refreshForCall } from '@/lib/server/sync';
 import type { SessionState } from '@/lib/domain/types';
 import type { AgentResponse, ClientStartRequest } from '@/types/conversation';
 
@@ -64,8 +64,8 @@ export async function POST(request: NextRequest) {
   // Answering the incoming call: only while that ticket or reminder is still ringing, else an ordinary call.
   const ringing = current.state.followUp;
   const callBack = persona === 'employee' && body.followUp && ringing && ringId(ringing) === body.followUp && isRinging(ringing, now) ? ringing : null;
-  // The greeting and prompt name her tickets, so they are refreshed first when stale.
-  const state = persona === 'employee' ? ((await refreshTickets(store, code, now)) ?? current.state) : current.state;
+  // The greeting and prompt name her tickets and the outage, so they are read again first; her account too.
+  const state = persona === 'employee' ? ((await refreshForCall(store, code, now)) ?? current.state) : current.state;
 
   try {
     const session = createAskItSession({ client, channel: body.channel_name, requesterId: body.requester_id, state, baseUrl: base.url, now, persona, callBack });

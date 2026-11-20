@@ -30,66 +30,80 @@ describe('IT desk persona tools', () => {
   });
 });
 
-const Q = { priority: '', state: '', assignee: '', group: '', category: '', opened: '', keyword: '', sort: '', limit: '' };
+const Q = { priority: '', state: '', assignee: '', group: '', category: '', opened: '', keyword: '', sort: '' };
 const list = (args: Partial<typeof Q>, state = freshState(), o: Parameters<typeof call>[3] = {}) => call(state, 'listQueue', { ...Q, ...args }, o);
 const C = { priority: '', state: '', assignee: '', group: '', category: '', opened: '', keyword: '', groupBy: '' };
 const count = (args: Partial<typeof C>, state = freshState(), o: Parameters<typeof call>[3] = {}) => call(state, 'countIncidents', { ...C, ...args }, o);
 const TODAY = NOW - 570 * MINUTE;
 
 describe('listQueue', () => {
-  it('reads the open queue, critical first then oldest, and puts all of it on screen', async () => {
+  it('sums up the open queue instead of reading it, and puts all of it on screen', async () => {
     const out = await list({});
     expect(out.status).toBe(200);
-    expect(items(out.result.data).map((i) => i.number)).toEqual(['INC0013002', 'INC0013003', 'INC0013001', 'INC0013004', 'INC0013006']);
-    expect(out.result.say).toMatch(/^I found 14 open incidents; they're all on your screen\. Here are the top 5\. First, I-N-C one three zero zero two, Payroll export failing in SAP: critical, in progress, with Karthik Nair/);
-    expect(out.result.data).toMatchObject({ onScreen: 14 });
+    expect(out.result.say).toBe("Here are 14 open incidents, 3 critical and 4 unassigned. They're on your screen. Want details on any of them?");
+    expect(out.result.say).not.toMatch(/I-N-C|First/);
+    expect(items(out.result.data).map((i) => i.number).slice(0, 5)).toEqual(['INC0013002', 'INC0013003', 'INC0013001', 'INC0013004', 'INC0013006']);
+    expect(items(out.result.data)).toHaveLength(14);
+    expect(out.result.data).toMatchObject({ onScreen: 14, critical: 3, unassigned: 4 });
     expect(out.state.itdesk.queue).toHaveLength(14);
-    expect(out.state.itdesk.board).toEqual({ kind: 'list', title: 'Open incidents', total: 14, more: false, at: NOW });
+    expect(out.state.itdesk.board).toEqual({ kind: 'list', title: 'Open incidents', total: 14, more: false, at: NOW, query: {} });
     expect(out.result.next).toMatch(/openIncident/);
+    expect(out.result.next).toMatch(/not read/i);
   });
   it('combines filters and asks ServiceNow for one more than the screen holds', async () => {
     const listOpen = vi.fn(async () => success([] as DeskIncident[]));
-    await list({ priority: 'critical', assignee: 'unassigned', opened: 'today', sort: 'newest' }, freshState(), { desk: { listOpen } });
+    const out = await list({ priority: 'critical', assignee: 'unassigned', opened: 'today', sort: 'newest' }, freshState(), { desk: { listOpen } });
     expect(listOpen).toHaveBeenCalledWith({ priority: 'critical', assignee: { kind: 'none' }, opened: 'today', since: TODAY, sort: 'newest' }, 26);
+    expect(out.state.itdesk.board).toMatchObject({ query: { priority: 'critical', assignee: 'unassigned', opened: 'today', sort: 'newest' } });
   });
   it.each([
-    [{ opened: 'today' }, ['13003', '13001', '13007'], 'I found 3 incidents opened today. First,'],
-    [{ priority: 'critical', opened: 'today' }, ['13003', '13001'], 'I found 2 critical incidents opened today. First,'],
-    [{ assignee: 'David Loo' }, ['13006'], 'I found 1 incident assigned to David Loo. First,'],
-    [{ group: 'software', state: 'in_progress' }, ['13002', '13004'], 'I found 2 in-progress incidents in the software group. First,'],
-    [{ keyword: 'the backup issue' }, ['13007'], 'I found 1 incident about “backup”. First,'],
-  ])('%j', async (args, numbers, lead) => {
+    [{ opened: 'today' }, ['13003', '13001', '13007'], "Here are 3 incidents opened today, 2 critical and 3 unassigned. They're on your screen. Want details on any of them?"],
+    [{ priority: 'critical', opened: 'today' }, ['13003', '13001'], "Here are 2 critical incidents opened today, 2 unassigned. They're on your screen. Want details on any of them?"],
+    [{ assignee: 'unassigned' }, ['13003', '13001', '13007', '13005'], "Here are 4 unassigned incidents, 2 critical. They're on your screen. Want details on any of them?"],
+    [{ group: 'software', state: 'in_progress' }, ['13002', '13004'], "Here are 2 in-progress incidents in the software group, 1 critical. They're on your screen. Want details on any of them?"],
+    [{ priority: 'moderate', assignee: 'assigned' }, ['13006', '13009', '13012'], "Here are 3 moderate-priority incidents assigned to someone. They're on your screen. Want details on any of them?"],
+  ])('%j', async (args, numbers, say) => {
     const out = await list(args);
     expect(out.state.itdesk.queue.map((i) => i.number.slice(-5))).toEqual(numbers);
-    expect(out.result.say.startsWith(lead)).toBe(true);
+    expect(out.result.say).toBe(say);
   });
-  it('lists resolved incidents, which the open queue leaves out', async () => {
+  it('names a single match briefly and offers the details', async () => {
+    const out = await list({ assignee: 'David Loo' });
+    expect(out.state.itdesk.queue.map((i) => i.number)).toEqual(['INC0013006']);
+    expect(out.result.say).toBe("There's one incident assigned to David Loo, I-N-C one three zero zero six, Laptop battery swelling on NB-1877. Want the details?");
+    expect((await list({ keyword: 'the backup issue' })).result.say).toBe("There's one incident about “backup”, I-N-C one three zero zero seven, Database backup job running slow. Want the details?");
+  });
+  it('lists resolved incidents without open-queue breakdowns', async () => {
     const s = freshState();
-    s.itdesk.backlog[0] = { ...s.itdesk.backlog[0], state: '6', stateLabel: 'Resolved' };
+    s.itdesk.backlog = s.itdesk.backlog.map((i, n) => (n < 3 ? { ...i, state: '6', stateLabel: 'Resolved', assignee: null } : i));
     const out = await list({ state: 'resolved' }, s);
-    expect(out.state.itdesk.queue.map((i) => i.number)).toEqual(['INC0013001']);
-    expect(out.result.say).toMatch(/^I found 1 resolved incident\. First, I-N-C one three zero zero one/);
+    expect(out.state.itdesk.queue.map((i) => i.number)).toEqual(['INC0013002', 'INC0013003', 'INC0013001']);
+    expect(out.result.say).toBe("Here are 3 resolved incidents. They're on your screen. Want details on any of them?");
+    expect((await list({ state: 'closed' }, s)).result.say).toBe('There are no closed incidents. Want me to widen the filter?');
     expect((await list({}, s)).state.itdesk.queue.map((i) => i.number)).not.toContain('INC0013001');
   });
-  it('reads only the asked number aloud and caps it at eight', async () => {
-    const two = await list({ assignee: 'unassigned', limit: 'two' });
-    expect(items(two.result.data).map((i) => i.number)).toEqual(['INC0013003', 'INC0013001']);
-    expect(two.result.say).toMatch(/^I found 4 unassigned incidents; they're all on your screen\. Here are the top 2\./);
-    const many = await list({ limit: '20' });
-    expect(items(many.result.data)).toHaveLength(8);
-  });
-  it('says when more are open than the screen shows', async () => {
+  it('says how many are shown when more match than the screen holds', async () => {
     const rows = Array.from({ length: 26 }, () => freshState().itdesk.backlog[0]);
     const out = await list({}, freshState(), { desk: { listOpen: async () => success(rows) } });
     expect(out.state.itdesk.queue).toHaveLength(25);
     expect(out.state.itdesk.board).toMatchObject({ total: 25, more: true });
-    expect(out.result.say).toMatch(/^I found more than 25 open incidents; the first 25 are on your screen\. Here are the top 5\./);
+    expect(out.result.say).toBe("There are more than 25 open incidents. The top 25 by priority are on your screen. Want details on any of them, or a narrower filter?");
+    const newest = await list({ sort: 'newest' }, freshState(), { desk: { listOpen: async () => success(rows) } });
+    expect(newest.result.say).toMatch(/^There are more than 25 open incidents\. The 25 newest are on your screen\./);
   });
-  it('clears the screen when nothing matches', async () => {
+  it('says nothing matched and suggests a wider filter', async () => {
     const out = await list({ priority: 'moderate', opened: 'yesterday' });
-    expect(out.result.say).toBe('There are no moderate-priority incidents opened yesterday.');
+    expect(out.result.say).toBe('There are no moderate-priority incidents opened yesterday. Want me to check this week instead?');
     expect(out.state.itdesk.board).toMatchObject({ kind: 'list', title: 'Moderate-priority incidents opened yesterday', total: 0 });
     expect(out.state.itdesk.queue).toEqual([]);
+    expect((await list({ category: 'database', opened: 'this_week', state: 'on_hold' })).result.say).toBe('There are no on-hold incidents in the database category opened this week. Want me to check this month instead?');
+    expect((await list({ group: 'payroll', priority: 'critical' })).result.say).toBe('There are no critical incidents in the payroll group. Want me to widen the filter?');
+    expect((await list({}, freshState(), { desk: { listOpen: async () => success([]) } })).result.say).toBe('There are no open incidents right now. The queue is clear.');
+  });
+  it('never puts a semicolon, colon or dash in what it says', async () => {
+    for (const args of [{}, { assignee: 'David Loo' }, { priority: 'moderate', opened: 'yesterday' }, { state: 'resolved' }]) {
+      expect((await list(args)).result.say.replace(/\w-(?=\w)/g, '')).not.toMatch(/[;:\u2013\u2014-]/);
+    }
   });
   it('refuses a filter that could break the query, without calling ServiceNow', async () => {
     const listOpen = vi.fn(async () => success([] as DeskIncident[]));
@@ -111,7 +125,7 @@ describe('countIncidents', () => {
     const out = await count({ priority: 'critical', assignee: 'unassigned' });
     expect(out.result.say).toBe('There are 2 critical unassigned incidents.');
     expect(out.result.data).toEqual({ total: 2, more: false, groups: [] });
-    expect(out.state.itdesk.board).toEqual({ kind: 'count', title: 'Critical unassigned incidents', total: 2, more: false, groupBy: null, groups: [], at: NOW });
+    expect(out.state.itdesk.board).toEqual({ kind: 'count', title: 'Critical unassigned incidents', total: 2, more: false, groupBy: null, groups: [], at: NOW, query: { priority: 'critical', assignee: 'unassigned' } });
   });
   it('uses the singular and says none plainly', async () => {
     expect((await count({ state: 'on_hold' })).result.say).toBe('There is 1 on-hold incident.');
@@ -140,22 +154,21 @@ describe('countIncidents', () => {
 describe('showDashboard', () => {
   it('reads the open queue and the last week, and shows the numbers', async () => {
     const listOpen = vi.fn((q: Parameters<DeskAdapter['listOpen']>[0], n: number) => makeDeps(freshState(), NOW).desk.listOpen(q, n));
-    const activity = vi.fn(async () => success({ opened: [NOW - MINUTE, NOW - 2 * DAY], resolved: [NOW - DAY] }));
+    const activity = vi.fn(async () => success({ opened: [NOW - MINUTE, NOW - 2 * DAY], resolved: [{ at: NOW - DAY, openedAt: NOW - DAY - 180 * MINUTE }] }));
     const out = await call(freshState(), 'showDashboard', {}, { desk: { listOpen, activity } });
     expect(out.status).toBe(200);
     expect(listOpen).toHaveBeenCalledWith({ sort: 'priority' }, 501);
     expect(activity).toHaveBeenCalledWith(zonedTime('2026-11-12', 0));
     const board = out.state.itdesk.board;
-    expect(board).toMatchObject({ kind: 'dashboard', at: NOW, resolvedWeek: 1 });
+    expect(board).toMatchObject({ kind: 'dashboard', at: NOW, resolvedWeek: 1, resolvedToday: 0, onHold: 1, inProgress: 3, oldest: { number: 'INC0013013' }, avgResolve: { ms: 180 * MINUTE, count: 1 } });
     expect(board?.kind === 'dashboard' && board.days.map((d) => d.opened)).toEqual([0, 0, 0, 0, 1, 0, 1]);
-    expect(out.result.say).toMatch(/^Here's the desk right now: \d+ open incidents, \d+ critical and \d+ unassigned\. \d+ came in today and 1 was resolved this week\. The busiest team is \w+/);
+    expect(out.result.say).toBe("Right now there are 14 open incidents, 3 critical, 4 unassigned and 1 on hold. 1 came in today and none were resolved today. The oldest was opened 5 days ago. It's all on your screen.");
   });
-  it('names the busiest team only when one team leads', async () => {
-    const tie = [{ ...freshState().itdesk.backlog[1] }, { ...freshState().itdesk.backlog[2] }];
-    const tied = await call(freshState(), 'showDashboard', {}, { desk: { listOpen: async () => success(tie), activity: async () => success({ opened: [], resolved: [] }) } });
-    expect(tied.result.say).not.toMatch(/busiest/);
-    const lead = await call(freshState(), 'showDashboard', {}, { desk: { listOpen: async () => success([...tie, { ...tie[0], number: 'INC0019999' }]), activity: async () => success({ opened: [], resolved: [] }) } });
-    expect(lead.result.say).toMatch(/The busiest team is Software with 2 open incidents\./);
+  it('keeps the summary short for a quiet desk', async () => {
+    const quiet = await call(freshState(), 'showDashboard', {}, { desk: { listOpen: async () => success([]), activity: async () => success({ opened: [], resolved: [{ at: NOW - MINUTE, openedAt: null }, { at: NOW - 2 * MINUTE, openedAt: null }] }) } });
+    expect(quiet.result.say).toBe("Right now there are no open incidents. None came in today and 2 were resolved today. It's all on your screen.");
+    const one = await call(freshState(), 'showDashboard', {}, { desk: { listOpen: async () => success([{ ...freshState().itdesk.backlog[5] }]), activity: async () => success({ opened: [], resolved: [{ at: NOW - MINUTE, openedAt: null }] }) } });
+    expect(one.result.say).toBe("Right now there is 1 open incident, 0 critical, 0 unassigned and 1 on hold. None came in today and 1 was resolved today. The oldest was opened 4 days ago. It's all on your screen.");
   });
   it('says honestly when ServiceNow cannot be read', async () => {
     const out = await call(freshState(), 'showDashboard', {}, { desk: { activity: async () => failure({ kind: 'timeout' }) } });
@@ -238,6 +251,11 @@ describe('openIncident', () => {
     const listed = await list({});
     const out = await opened('the second one', listed.state);
     expect(out.state.itdesk.current?.number).toBe('INC0013003');
+  });
+  it('resolves any row on the screen by position, not only the first few', async () => {
+    const listed = await list({});
+    expect((await opened('the tenth one', listed.state)).state.itdesk.current?.number).toBe(listed.state.itdesk.queue[9].number);
+    expect((await opened('number 12', listed.state)).state.itdesk.current?.number).toBe(listed.state.itdesk.queue[11].number);
   });
   it('finds one incident by keywords and includes the latest work notes', async () => {
     const out = await opened('the laptop battery one');
@@ -374,6 +392,13 @@ describe('prepareIncidentUpdate', () => {
     expect(hold.result.say).toMatch(/put it on hold, awaiting vendor/);
     const resolve = await update(s, { resolutionNotes: 'Export job fixed' });
     expect(resolve.state.pending.at(-1)!.payload).toMatchObject({ fields: { state: '6', close_notes: 'Export job fixed' } });
+  });
+  it('counts an incident resolved by voice on the simulated desk as resolved today, with its time to resolve', async () => {
+    const s = (await opened('13002')).state;
+    const prep = await update(s, { resolutionNotes: 'Export job fixed' });
+    const done = (await call(prep.state, 'confirmAction', { code: codeOf(prep.result) })).state;
+    const board = (await call(done, 'showDashboard', {})).state.itdesk.board;
+    expect(board).toMatchObject({ kind: 'dashboard', resolvedToday: 1, resolvedWeek: 1, avgResolve: { ms: DAY, count: 1 } });
   });
   it('refuses empty or unchanged updates and bad values', async () => {
     const s = (await opened('13002')).state;

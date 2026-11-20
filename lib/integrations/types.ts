@@ -71,6 +71,8 @@ export interface DeskIncident {
   urgency: Level;
   impact: Level;
   openedAt: number | null;
+  // Simulated desk only: when it was resolved, for the dashboard.
+  resolvedAt?: number | null;
 }
 
 export interface WorkNote {
@@ -126,9 +128,10 @@ export interface DeskAdapter {
   update(sysId: string, fields: Record<string, string>): Promise<Result<DeskIncident>>;
 }
 
+// When incidents were opened, and when they were resolved with when that same incident was opened.
 export interface Activity {
   opened: number[];
-  resolved: number[];
+  resolved: { at: number; openedAt: number | null }[];
 }
 
 export type AccountAction = 'unlock' | 'resetPassword' | 'resetMfa';

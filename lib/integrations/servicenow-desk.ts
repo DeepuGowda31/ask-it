@@ -174,17 +174,24 @@ export class ServiceNowDesk implements DeskAdapter {
   }
 
   // Members by team name, then all their open incidents in one query by sys_id.
-  private async times(field: 'opened_at' | 'resolved_at', since: number): Promise<Result<number[]>> {
-    const res = await this.rows('incident', { sysparm_query: `${field}>=${this.minutesAgo(since)}`, sysparm_fields: field, sysparm_limit: String(ACTIVITY_LIMIT) });
-    if (!res.ok) return res;
-    return success(res.value.filter(isRecord).map((r) => parseTime(String(r[field] ?? ''))).filter((t): t is number => t !== null));
+  private async since(field: 'opened_at' | 'resolved_at', since: number, fields: string): Promise<Result<Json[]>> {
+    const res = await this.rows('incident', { sysparm_query: `${field}>=${this.minutesAgo(since)}`, sysparm_fields: fields, sysparm_limit: String(ACTIVITY_LIMIT) });
+    return res.ok ? success(res.value.filter(isRecord)) : res;
   }
 
+  // Resolutions carry the same incident's opened_at, so the time to resolve is measured, not guessed.
   async activity(since: number): Promise<Result<Activity>> {
-    const [opened, resolved] = await Promise.all([this.times('opened_at', since), this.times('resolved_at', since)]);
+    const [opened, resolved] = await Promise.all([this.since('opened_at', since, 'opened_at'), this.since('resolved_at', since, 'resolved_at,opened_at')]);
     if (!opened.ok) return opened;
     if (!resolved.ok) return resolved;
-    return success({ opened: opened.value, resolved: resolved.value });
+    const time = (r: Json, field: string) => parseTime(String(r[field] ?? ''));
+    return success({
+      opened: opened.value.map((r) => time(r, 'opened_at')).filter((t): t is number => t !== null),
+      resolved: resolved.value.flatMap((r) => {
+        const at = time(r, 'resolved_at');
+        return at === null ? [] : [{ at, openedAt: time(r, 'opened_at') }];
+      }),
+    });
   }
 
   async roster(teams: readonly string[]): Promise<Result<Resource[]>> {

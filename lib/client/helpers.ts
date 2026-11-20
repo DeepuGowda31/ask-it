@@ -65,6 +65,14 @@ export function ageLabel(openedAt: number | null, now: number): string {
   return minutes < 24 * 60 ? `${Math.floor(minutes / 60)}h` : `${Math.floor(minutes / (24 * 60))}d`;
 }
 
+// "45m", "16.2h", "3.2d": a duration to one decimal in the largest unit under two of the next.
+export function durationLabel(ms: number): string {
+  const minutes = ms / MINUTE_MS;
+  const one = (n: number) => String(Math.round(n * 10) / 10);
+  if (minutes < 60) return `${Math.max(1, Math.round(minutes))}m`;
+  return minutes < 48 * 60 ? `${one(minutes / 60)}h` : `${one(minutes / (24 * 60))}d`;
+}
+
 // ServiceNow incident hold reason codes.
 const HOLD: Record<string, string> = { '1': 'awaiting caller', '3': 'awaiting problem', '4': 'awaiting vendor', '5': 'awaiting change' };
 

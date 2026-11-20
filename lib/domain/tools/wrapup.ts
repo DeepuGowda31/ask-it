@@ -75,7 +75,7 @@ function summaryMarkdown(state: SessionState, now: number): string {
     '',
     '## Outages followed',
     '',
-    ...bullets(f.followed.map((o) => `${o.incident} · ${o.title} (${o.affected} affected)`)),
+    ...bullets(f.followed.map((o) => `${o.incident} · ${o.title}${o.affected === null ? '' : ` (${o.affected} affected)`}`)),
     '',
     '## Account actions',
     '',

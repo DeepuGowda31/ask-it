@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, KeyRound, MapPin, Mic, RotateCcw, Ticket, Wrench } from 'lucide-react';
+import { Download, MapPin, Mic, RotateCcw } from 'lucide-react';
 import { Brand } from './Brand';
 import { Drawer } from './Drawer';
 import { DocumentView } from './DocumentView';
@@ -22,7 +22,6 @@ import { findAsset } from '@/lib/domain/assets';
 import { downloadText, timeOfDay } from '@/lib/client/format';
 
 const SESSION_KEY = 'askit.session';
-const TRY_SAYING = ['My VPN keeps disconnecting', "I'm locked out of my account", 'Is Slack down?', "What's the status of my tickets?"];
 const CODE_RE = /^[A-HJ-NP-Z2-9]{3}-[A-HJ-NP-Z2-9]{3}$/;
 
 function readStoredCode(): string | null {
@@ -129,9 +128,9 @@ export default function EmployeeApp({ setupWarning }: { setupWarning: string | n
           href={code ? `/it?session=${code}` : '/it'}
           target="_blank"
           rel="noopener noreferrer"
-          title={code ? `Open the IT dashboard for session ${code}` : undefined}
+          title={code ? `Open IT Operations for session ${code}` : undefined}
         >
-          IT dashboard
+          IT Operations
         </a>
       </nav>
     </header>
@@ -141,9 +140,9 @@ export default function EmployeeApp({ setupWarning }: { setupWarning: string | n
     <section className="wc-side" aria-label="Your IT status">
       {view ? (
         <>
-          {sessionStatus === 'error' ? <p className="wc-notice wc-notice-warn" role="status">Connection lost. Showing the last known state; retrying…</p> : null}
+          {sessionStatus === 'error' ? <p className="wc-notice wc-notice-warn" role="status">Connection lost. Showing the last known state while retrying…</p> : null}
           <RightNowCard view={view} now={now} inCall={inCall} />
-          <MyTickets view={view} now={now} />
+          <MyTickets view={view} />
           <DocumentList documents={view.documents} onOpen={showDoc} />
         </>
       ) : sessionStatus === 'not_found' || sessionError ? null : (
@@ -153,15 +152,15 @@ export default function EmployeeApp({ setupWarning }: { setupWarning: string | n
   );
 
   return (
-    <div className="min-h-dvh">
+    <div className="flex min-h-dvh flex-col">
       {header}
       {setupWarning && !inCall ? (
-        <div className="mx-auto max-w-[1200px] px-4 md:px-10">
+        <div className="mx-auto w-full max-w-[1200px] px-4 md:px-10">
           <p className="wc-notice wc-notice-warn" role="note">{setupWarning}</p>
         </div>
       ) : null}
       {sessionStatus === 'not_found' || sessionError ? (
-        <div className="mx-auto max-w-[1200px] px-4 pt-2 md:px-10">
+        <div className="mx-auto w-full max-w-[1200px] px-4 pt-2 md:px-10">
           <div className="wc-notice wc-notice-bad" role="alert">
             <span>{sessionError ?? `Session ${code} has expired.`}</span>
             <button className="wc-btn" onClick={() => void newSession()}><RotateCcw size={14} aria-hidden="true" /> New session</button>
@@ -178,7 +177,7 @@ export default function EmployeeApp({ setupWarning }: { setupWarning: string | n
               <p className="wc-asset-place"><MapPin size={14} aria-hidden="true" /> {asset.location}</p>
               {asset.ticket ? (
                 <p className="wc-notice wc-notice-warn wc-asset-reported" role="note">
-                  Already reported as <span className="wc-mono">{asset.ticket.number}</span>: {asset.ticket.summary}. Your report will be added to it.
+                  Already reported as <span className="wc-mono">{asset.ticket.number}</span> ({asset.ticket.summary}). Your report will be added to it.
                 </p>
               ) : null}
             </div>
@@ -195,47 +194,19 @@ export default function EmployeeApp({ setupWarning }: { setupWarning: string | n
           {side}
         </main>
       ) : !inCall ? (
-        <main id="main-content" className="wc-workspace wc-workspace-ready">
-          <section className="wc-welcome wc-enter">
-            <h2>ASK IT</h2>
-            <p className="wc-lead">Tell IT what&apos;s wrong. Most issues get fixed on the call.</p>
-            <div className="wc-features" aria-label="In this conversation">
-              <span className="wc-pill-label">In this conversation</span>
-              <ul>
-                <li><Wrench aria-hidden="true" /> Guided fixes, one step at a time</li>
-                <li><KeyRound aria-hidden="true" /> Unlock and resets after an email code</li>
-                <li><Ticket aria-hidden="true" /> A ticket only when the fix fails</li>
-              </ul>
-            </div>
-            <div className="wc-built-with">
-              <span>Built with</span>
-              <ul aria-label="Technology">
-                <li className="wc-chip">Agora Conversational AI</li>
-                <li className="wc-chip">Murf Falcon TTS</li>
-                <li className="wc-chip">ServiceNow</li>
-                <li className="wc-chip">Auth0</li>
-              </ul>
-            </div>
-            <div className="mb-3 mt-7 flex flex-wrap items-center gap-3">
-              <button className="wc-btn wc-btn-primary wc-btn-lg" onClick={() => call.startCall(false)} disabled={!code}>
-                <Mic size={18} aria-hidden="true" /> Talk to IT
+        <main id="main-content" className="wc-workspace wc-workspace-ready wc-landing">
+          <section className="wc-welcome wc-enter" aria-labelledby="landing-title">
+            <h2 id="landing-title">IT help, <span className="wc-accent-text">one call away.</span></h2>
+            <p className="wc-lead">Tell IT what&apos;s wrong.<br />Most issues get fixed on the call.</p>
+            <div className="wc-talk-row">
+              <button className="wc-btn wc-btn-primary wc-btn-lg wc-talk" onClick={() => call.startCall(false)} disabled={!code}>
+                <Mic size={20} aria-hidden="true" /> Talk to IT
               </button>
               {call.canTakeOver ? (
-                <button className="wc-btn wc-btn-lg" onClick={() => call.startCall(true)}>Take over the other call</button>
+                <button className="wc-btn wc-btn-lg wc-talk-alt" onClick={() => call.startCall(true)}>Take over the other call</button>
               ) : null}
             </div>
-            <p className="wc-note">Microphone access required. Sessions end automatically after 10 minutes.</p>
-            <p className="wc-note">
-              Demo for Priya Sharma at Nimbus Labs. Each card shows whether its system is live or simulated.
-              {code ? <> Session <span className="wc-mono text-foreground">{code}</span>.</> : null}
-            </p>
-            {call.error ? <p className="wc-notice wc-notice-bad mt-4" role="alert">{call.error}</p> : null}
-            <div className="wc-try">
-              <p className="wc-label">Try saying</p>
-              <ul>
-                {TRY_SAYING.map((t) => <li key={t}><q>{t}</q></li>)}
-              </ul>
-            </div>
+            {call.error ? <p className="wc-notice wc-notice-bad mt-6" role="alert">{call.error}</p> : null}
           </section>
           <aside className="wc-signal-area" aria-label="Call status"><CallSignal call={call} /></aside>
           {side}

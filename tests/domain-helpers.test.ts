@@ -205,12 +205,9 @@ describe('seed', () => {
 });
 
 describe('seed in live ticket mode', () => {
-  it('has no simulated tickets or outage unless a real incident is configured', () => {
+  it('has no simulated tickets or outage; a real outage is read from ServiceNow later', () => {
     const s = freshState(NOW, { tickets: 'live' });
     expect(s.tickets).toEqual([]);
     expect(s.outages).toEqual([]);
-    const withOutage = freshState(NOW, { tickets: 'live', outageIncident: 'INC0020001' });
-    expect(withOutage.outages).toEqual([expect.objectContaining({ service: 'concur', incident: 'INC0020001' })]);
-    expect(freshState(NOW, { tickets: 'live', outageIncident: 'INC1^x' }).outages).toEqual([]);
   });
 });

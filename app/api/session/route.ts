@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getStore } from '@/lib/server/store';
 import { createSession } from '@/lib/server/session';
 import { buildDeps, seedOptions } from '@/lib/server/deps';
+import { syncLive } from '@/lib/server/sync';
 import { findAsset, type Asset } from '@/lib/domain/assets';
 import { createSessionState } from '@/lib/domain/seed';
 import type { AssetVisit } from '@/lib/domain/types';
@@ -30,7 +31,10 @@ export async function POST(request?: NextRequest) {
   if (asset === undefined) return reply({ error: 'unknown_asset' }, 400);
   try {
     const now = Date.now();
-    const code = await createSession(getStore(), now, seedOptions(), asset ? await visit(asset, now) : null);
+    const store = getStore();
+    const code = await createSession(store, now, seedOptions(), asset ? await visit(asset, now) : null);
+    // Live account and outage facts come from Auth0 and ServiceNow, not the seed.
+    await syncLive(store, code, now);
     return reply({ code }, 201);
   } catch (error) {
     console.error('Failed to create session:', error);

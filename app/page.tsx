@@ -9,7 +9,7 @@ export default function EmployeePage() {
   const missing = missingEnv();
   if (missing.length) return <SetupScreen missing={missing} />;
   const base = resolvePublicBaseUrl();
-  let warning = base.ok ? null : `Voice calls are disabled until this is fixed: ${base.reason}`;
+  let warning = base.ok ? null : `Voice calls are disabled until this is fixed. ${base.reason}`;
   if (!warning && process.env.VERCEL && !usingSharedStore()) {
     warning = 'This deployment has no Redis store configured (UPSTASH_REDIS_REST_URL / KV_REST_API_URL), so serverless instances will not share session state.';
   }

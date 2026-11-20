@@ -1,6 +1,7 @@
 'use client';
 
 import { BellRing, Check, Mic } from 'lucide-react';
+import { BrandMark } from './Brand';
 import { Transcript } from './Transcript';
 import { CallBanners, CallDock, CallSignal } from './VoiceCall';
 import type { StateView } from '@/lib/client/useSessionState';
@@ -86,7 +87,7 @@ export function LiveIncident({ desk, now }: { desk: Desk; now: number }) {
           <span className="wc-faint ml-auto whitespace-nowrap text-[12px]">{now < asked.due ? `by ${timeOfDay(asked.due)}` : `due ${timeOfDay(asked.due)}`}</span>
         </p>
       ) : null}
-      {note && !pending ? <p className="wc-faint truncate text-[12px]" title={note.text}>Last note{note.at ? ` · ${timeOfDay(note.at)}` : ''}: <span className="wc-muted">{note.text}</span></p> : null}
+      {note && !pending ? <p className="wc-faint truncate text-[12px]" title={note.text}>Last note{note.at ? ` at ${timeOfDay(note.at)}` : ''}<span className="wc-muted ml-2">{note.text}</span></p> : null}
     </section>
   );
 }
@@ -111,10 +112,10 @@ export function QueueList({ queue, current, now }: { queue: Incident[]; current:
 }
 
 // The call column: start a call, then the live conversation fills it.
-export function CallPanel({ call, now, catalog, footer }: { call: VoiceCall; now: number; catalog: ReadonlyMap<string, TicketInfo>; footer: string }) {
+export function CallPanel({ call, now, catalog }: { call: VoiceCall; now: number; catalog: ReadonlyMap<string, TicketInfo> }) {
   const inCall = call.phase !== 'idle';
   return (
-    <section className="wc-call-col" aria-label="IT desk voice call">
+    <section className="wc-call-col" aria-label="IT Operations voice call">
       {inCall ? (
         <>
           <div className="flex items-center justify-between gap-3">
@@ -133,14 +134,14 @@ export function CallPanel({ call, now, catalog, footer }: { call: VoiceCall; now
         </>
       ) : (
         <div className="wc-desk-idle">
-          <h2 className="wc-desk-title">IT desk by voice</h2>
-          <p className="wc-muted">Tap once and talk. Answers appear on the left; nothing is saved until you say yes.</p>
+          <BrandMark mark="operations" className="wc-desk-mark" />
+          <h2 className="wc-desk-title">IT Operations</h2>
+          <p className="wc-muted">Talk to run the service desk. Nothing changes until you say yes.</p>
           <button className="wc-btn wc-btn-primary wc-btn-lg w-full" onClick={() => call.startCall(false)}><Mic size={18} aria-hidden="true" /> Talk to ASK IT</button>
           {call.canTakeOver ? <button className="wc-btn w-full" onClick={() => call.startCall(true)}>Take over the other call</button> : null}
           {call.error ? <p className="wc-notice wc-notice-bad" role="alert">{call.error}</p> : null}
         </div>
       )}
-      <p className="wc-call-foot">{footer}</p>
     </section>
   );
 }

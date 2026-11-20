@@ -34,7 +34,7 @@ export function makeDeps(state: SessionState, now: number, o: Overrides = {}): D
   return {
     tickets: Object.assign(tickets, o.tickets),
     identity: Object.assign(identity, o.identity),
-    desk: Object.assign(new SimulatedDesk(state), o.desk),
+    desk: Object.assign(new SimulatedDesk(state, now), o.desk),
     knowledge: Object.assign(new SimulatedKnowledge(), o.knowledge),
     status: o.status ?? { check: vi.fn(async () => OPERATIONAL) },
     notifyMode: o.notifyMode ?? 'simulated',

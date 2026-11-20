@@ -227,6 +227,10 @@ describe('IT desk persona', () => {
     expect(p).toMatch(/no markdown/i);
     expect(p).toMatch(/explicit yes/i);
     expect(p).toMatch(/never read it aloud/);
+    expect(p).toMatch(/listQueue[^\n]*short summary[^\n]*never read the incidents one by one/i);
+    expect(p).toMatch(/picks one[^\n]*call openIncident/);
+    expect(p).not.toMatch(/Read out only the first few items/);
+    expect(p).toMatch(/showDashboard[^\n]*on hold[^\n]*resolved today[^\n]*oldest/);
     expect(p).not.toMatch(/Priya Sharma|checkServiceStatus|workday|copilot|okta/i);
     expect(buildGreeting(freshState(), 'itdesk')).toBe("Hi, I'm your IT Admin voice agent. How can I help?");
     expect(IT_INTRO).toMatch(/ServiceNow/);

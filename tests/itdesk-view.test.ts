@@ -8,7 +8,7 @@ describe('IT desk view', () => {
   });
   it('shows the queue, the open incident and the waiting update without internal ids', async () => {
     let s = (await call(freshState(), 'listQueue', { priority: 'critical', state: '', assignee: '', group: '', category: '', opened: '', keyword: '', sort: '', limit: '' })).state;
-    expect(buildItDeskView(s, NOW).board).toEqual({ kind: 'list', title: 'Critical incidents', total: 3, more: false, at: NOW });
+    expect(buildItDeskView(s, NOW).board).toEqual({ kind: 'list', title: 'Critical incidents', total: 3, more: false, at: NOW, query: { priority: 'critical' } });
     s = (await call(s, 'openIncident', { ticket: '13001' })).state;
     s = (await call(s, 'prepareIncidentUpdate', { ticket: '', assignedTo: 'David Dan', assignmentGroup: '', state: '', holdReason: '', urgency: '', impact: '', category: '', workNote: '', comment: '', resolutionNotes: '' })).state;
     const v = buildItDeskView(s, NOW);

@@ -37,7 +37,7 @@ function applyUser(state: SessionState, user: AccountInfo, mode: Mode, now: numb
 // The mirror is enough when it came from the same backend; otherwise ask it.
 export function currentUser(state: SessionState, identity: IdentityAdapter): Promise<Result<AccountInfo>> {
   const a = state.account;
-  if (a.source === identity.mode && a.userId) return Promise.resolve(success({ userId: a.userId, email: a.email, locked: a.locked, lastPasswordReset: a.lastPasswordReset, factors: a.factors, factorsKnown: a.factorsKnown }));
+  if (a.source === identity.mode && a.userId && a.locked !== null) return Promise.resolve(success({ userId: a.userId, email: a.email, locked: a.locked, lastPasswordReset: a.lastPasswordReset, factors: a.factors, factorsKnown: a.factorsKnown }));
   return identity.getUser();
 }
 

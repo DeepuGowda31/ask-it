@@ -1,6 +1,6 @@
 import type { StatusFeed } from '@/lib/integrations/types';
 
-// Services ASK IT can check. Internal ones (no feed) come from the seeded outage list.
+// Services ASK IT can check. Internal ones (no feed) come from the outage list: seeded when simulated, read from ServiceNow when live.
 interface Service {
   key: string;
   name: string;
@@ -38,7 +38,7 @@ export function findService(raw: string): Service | undefined {
   return SERVICES.find((s) => [s.key, s.name.replace(/^the /i, ''), ...s.aliases].some((a) => squash(a) === q));
 }
 
-export const serviceName = (key: string) => SERVICES.find((s) => s.key === key)?.name ?? key;
+const serviceName = (key: string) => SERVICES.find((s) => s.key === key)?.name ?? key;
 
 // Whether free text names a service, by whole words.
 export function mentionsService(text: string, key: string): boolean {
@@ -46,3 +46,9 @@ export function mentionsService(text: string, key: string): boolean {
   const hay = ` ${norm(text)} `;
   return Boolean(s && [s.key, ...s.aliases].some((a) => hay.includes(` ${norm(a)} `)));
 }
+
+// The internal service an incident's text names, or '' when it names none.
+export const internalServiceIn = (text: string) => SERVICES.find((s) => !s.feed && mentionsService(text, s.key))?.key ?? '';
+
+// What an outage is called aloud: its service, or its own title when it names none.
+export const outageName = (o: { service: string; title: string }) => (o.service ? serviceName(o.service) : o.title);

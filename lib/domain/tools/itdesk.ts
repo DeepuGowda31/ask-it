@@ -1,6 +1,6 @@
 import { describeFailure, success, type Failure, type Result } from '@/lib/integrations/http';
-import type { Activity, DeskAdapter, DeskIncident, Mode, Ref, Resource, WorkNote } from '@/lib/integrations/types';
-import { buildDashboard, weekStart } from '../dashboard';
+import type { Activity, DeskAdapter, DeskIncident, Mode, Opened, QueueQuery, QueueSort, Ref, Resource, WorkNote } from '@/lib/integrations/types';
+import { buildDashboard, weekStart, type Dashboard } from '../dashboard';
 import { CATEGORIES, GROUP_BY, QUERY_PARAMS, SORTS, describeQuery, groupIncidents, parseQueueArgs } from '../queue-query';
 import { parseTicketNumber, spokenDigits, spokenTicket } from '../tickets';
 import { DAY, MINUTE, formatTime } from '../time';
@@ -9,7 +9,7 @@ import { alertSay, failed, ok, plural, prepare, tool, type Args, type Outcome } 
 import { queueAlert } from '../actions';
 
 const IT = ['itdesk' as const];
-const ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth'];
+const ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
 const STOP = new Set('the a an one incident ticket about with for of on in that this is it'.split(' '));
 const LEVELS: Record<string, string> = { high: '1', medium: '2', low: '3', '1': '1', '2': '2', '3': '3' };
 const LEVEL_WORD: Record<string, string> = { '1': 'high', '2': 'medium', '3': 'low' };
@@ -47,13 +47,6 @@ export function incidentAge(openedAt: number | null, now: number): string {
 
 const failureOutcome = (title: string, error: string, f: Failure, what: string) => failed(title, error, `I couldn't ${what}: ${describeFailure('ServiceNow', f)}`);
 
-const owner = (i: DeskIncident) => (i.assignee ? `with ${i.assignee.name}` : 'unassigned');
-
-function queueLine(i: DeskIncident, index: number, now: number): string {
-  const ordinal = ORDINALS[index].charAt(0).toUpperCase() + ORDINALS[index].slice(1);
-  return `${ordinal}, ${spokenTicket(i.number)}, ${i.summary}: ${i.priorityLabel.toLowerCase()}, ${i.stateLabel.toLowerCase()}, ${owner(i)}, opened ${incidentAge(i.openedAt, now)}.`;
-}
-
 const SCREEN_LIMIT = 25;
 const COUNT_LIMIT = 500;
 const READ_GROUPS = 4;
@@ -61,13 +54,42 @@ const GROUP_WORD: Record<GroupBy, string> = { priority: 'priority', state: 'stat
 
 const badFilter = (field: string) => failed(`Queue: unclear ${field}`, 'invalid_filter', `I couldn't use that ${field}. Could you say it another way?`);
 
+const DONE_STATES = new Set(['resolved', 'closed', 'canceled']);
+const WIDER: Partial<Record<Opened, string>> = { today: 'this week', yesterday: 'this week', last_24h: 'this week', this_week: 'this month', last_7_days: 'this month' };
+const SHOWN: Record<QueueSort, (n: number) => string> = { priority: (n) => `top ${n} by priority`, newest: (n) => `${n} newest`, oldest: (n) => `${n} oldest` };
+
+// The filters as asked, empty ones left out, so the board can be read again later.
+const boardQuery = (args: Args): Args => Object.fromEntries([...Object.keys(QUERY_PARAMS), 'sort'].filter((k) => args[k]).map((k) => [k, args[k]]));
+
+const criticalOf = (list: DeskIncident[]) => list.filter((i) => i.priority === 1).length;
+const unassignedOf = (list: DeskIncident[]) => list.filter((i) => !i.assignee).length;
+
+// ", 2 critical and 3 unassigned", leaving out what the filter already fixes and what finished work cannot be.
+function breakdown(list: DeskIncident[], q: QueueQuery): string {
+  if (q.state && DONE_STATES.has(q.state)) return '';
+  const parts = [!q.priority && criticalOf(list) && `${criticalOf(list)} critical`, !q.assignee && unassignedOf(list) && `${unassignedOf(list)} unassigned`].filter(Boolean);
+  return parts.length ? `, ${parts.join(' and ')}` : '';
+}
+
+// A summary of the list on screen; the tickets themselves are never read one by one.
+function queueSay(list: DeskIncident[], more: boolean, q: QueueQuery): string {
+  const d = describeQuery(q);
+  if (more) return `There are more than ${SCREEN_LIMIT} ${d.noun(2)}. The ${SHOWN[q.sort](SCREEN_LIMIT)} are on your screen. Want details on any of them, or a narrower filter?`;
+  if (!list.length) {
+    if (Object.keys(q).every((k) => k === 'sort')) return 'There are no open incidents right now. The queue is clear.';
+    const wider = q.opened && WIDER[q.opened];
+    return `There are no ${d.noun(0)}. ${wider ? `Want me to check ${wider} instead?` : 'Want me to widen the filter?'}`;
+  }
+  if (list.length === 1) return `There's one ${d.noun(1)}, ${spokenTicket(list[0].number)}, ${list[0].summary.trim().replace(/[.!?]+$/, '')}. Want the details?`;
+  return `Here are ${d.phrase(list.length)}${breakdown(list, q)}. They're on your screen. Want details on any of them?`;
+}
+
 const listQueue = tool<Result<DeskIncident[]>>({
   name: 'listQueue',
-  description: "List open ServiceNow incidents with any mix of filters. Everything found also appears on the engineer's screen; read out only the first few.",
+  description: "List open ServiceNow incidents with any mix of filters. Everything found appears on the engineer's screen; the reply is a short summary, never the tickets one by one.",
   params: {
     ...QUERY_PARAMS,
     sort: { description: 'priority (default), newest or oldest; empty string for priority', enum: SORTS, allowEmpty: true },
-    limit: { description: 'How many to read out, up to 8; empty string means 5', allowEmpty: true },
   },
   personas: IT,
   minutesSaved: 2,
@@ -83,16 +105,15 @@ const listQueue = tool<Result<DeskIncident[]>>({
     const more = effect.value.length > SCREEN_LIMIT;
     const list = effect.value.slice(0, SCREEN_LIMIT);
     state.itdesk.queue = list;
-    state.itdesk.board = { kind: 'list', title: d.title, total: list.length, more, at: now };
-    if (!list.length) return { title: `Queue: no ${d.noun(0)}`, result: ok(`There are no ${d.noun(0)}.`, { incidents: [], onScreen: 0 }) };
-    const spoken = list.slice(0, limitOf(args.limit));
-    const found = more ? `more than ${SCREEN_LIMIT} ${d.noun(2)}; the first ${SCREEN_LIMIT} are on your screen` : list.length > spoken.length ? `${d.phrase(list.length)}; they're all on your screen` : d.phrase(list.length);
-    const top = spoken.length < list.length ? ` Here are the top ${spoken.length}.` : '';
-    const say = `I found ${found}.${top} ${spoken.map((i, n) => queueLine(i, n, now)).join(' ')} Which one do you want to open?`;
-    const incidents = spoken.map((i, n) => ({ position: n + 1, number: i.number, summary: i.summary, priority: i.priorityLabel, state: i.stateLabel, assignee: i.assignee?.name ?? null, group: i.group?.name ?? null, caller: i.caller }));
+    state.itdesk.board = { kind: 'list', title: d.title, total: list.length, more, at: now, query: boardQuery(args) };
+    const incidents = list.map((i, n) => ({ position: n + 1, number: i.number, summary: i.summary, priority: i.priorityLabel, state: i.stateLabel, assignee: i.assignee?.name ?? null, group: i.group?.name ?? null, caller: i.caller }));
     return {
-      title: `Queue: ${more ? `${SCREEN_LIMIT}+ ${d.noun(2)}` : d.phrase(list.length)}`,
-      result: ok(say, { incidents, onScreen: list.length }, 'When the engineer picks one, call openIncident with its number. "The second one" is position 2. Everything found is on their screen.'),
+      title: list.length ? `Queue: ${more ? `${SCREEN_LIMIT}+ ${d.noun(2)}` : d.phrase(list.length)}` : `Queue: no ${d.noun(0)}`,
+      result: ok(
+        queueSay(list, more, parsed.query),
+        { incidents, onScreen: list.length, more, critical: criticalOf(list), unassigned: unassignedOf(list) },
+        list.length ? 'The list is on the engineer\'s screen: do not read it aloud. When they pick one, call openIncident with its number or position; "the second one" is position 2.' : undefined,
+      ),
     };
   },
 });
@@ -119,7 +140,7 @@ const countIncidents = tool<Result<DeskIncident[]>>({
     const list = effect.value.slice(0, COUNT_LIMIT);
     const groupBy = (args.groupBy || null) as GroupBy | null;
     const groups = groupBy ? groupIncidents(list, groupBy, now) : [];
-    state.itdesk.board = { kind: 'count', title: d.title, total: list.length, more, groupBy, groups, at: now };
+    state.itdesk.board = { kind: 'count', title: d.title, total: list.length, more, groupBy, groups, at: now, query: boardQuery(args) };
     const total = more ? `are more than five hundred ${d.noun(2)}` : list.length === 0 ? `are no ${d.noun(0)}` : `${list.length === 1 ? 'is' : 'are'} ${d.phrase(list.length)}`;
     const read = groups.slice(0, READ_GROUPS).map((g) => `${g.label} ${g.count}`);
     const breakdown = groupBy && read.length ? ` By ${GROUP_WORD[groupBy]}: ${read.join(', ')}${groups.length > READ_GROUPS ? ', and the rest are on your screen' : ''}.` : '';
@@ -130,26 +151,67 @@ const countIncidents = tool<Result<DeskIncident[]>>({
   },
 });
 
+// The dashboard's two reads: up to 501 open incidents and the last week's activity.
+const dashboardReads = (desk: DeskAdapter, now: number) => Promise.all([desk.listOpen({ sort: 'priority' }, COUNT_LIMIT + 1), desk.activity(weekStart(now))]);
+const dashboardOf = (open: DeskIncident[], activity: Activity, now: number) => buildDashboard(open.slice(0, COUNT_LIMIT), open.length > COUNT_LIMIT, activity, now);
+
+type ItDesk = SessionState['itdesk'];
+type Board = NonNullable<ItDesk['board']>;
+export interface BoardRead {
+  rows: Result<DeskIncident[]>;
+  activity?: Result<Activity>;
+}
+
+// A list, count or dashboard read again the way its tool read it; null for boards that do not come from the incident table.
+export async function readBoard(desk: DeskAdapter, board: Board, now: number): Promise<BoardRead | null> {
+  if (board.kind === 'dashboard') {
+    const [rows, activity] = await dashboardReads(desk, now);
+    return { rows, activity };
+  }
+  if ((board.kind !== 'list' && board.kind !== 'count') || !board.query) return null;
+  const parsed = parseQueueArgs(board.query, now);
+  return parsed.ok ? { rows: await desk.listOpen(parsed.query, (board.kind === 'list' ? SCREEN_LIMIT : COUNT_LIMIT) + 1) } : null;
+}
+
+// The board and its list as ServiceNow says now; when it was asked stays, so the screen does not replay its entry. Null when a read failed.
+export function refreshBoard(desk: ItDesk, read: BoardRead, now: number): Pick<ItDesk, 'board' | 'queue'> | null {
+  const board = desk.board;
+  if (!board || !read.rows.ok) return null;
+  const rows = read.rows.value;
+  if (board.kind === 'list') return { queue: rows.slice(0, SCREEN_LIMIT), board: { ...board, total: Math.min(rows.length, SCREEN_LIMIT), more: rows.length > SCREEN_LIMIT, syncedAt: now } };
+  if (board.kind === 'count') {
+    const list = rows.slice(0, COUNT_LIMIT);
+    return { queue: desk.queue, board: { ...board, total: list.length, more: rows.length > COUNT_LIMIT, groups: board.groupBy ? groupIncidents(list, board.groupBy, now) : [], syncedAt: now } };
+  }
+  if (board.kind === 'dashboard' && read.activity?.ok) return { queue: desk.queue, board: { kind: 'dashboard', at: board.at, ...dashboardOf(rows, read.activity.value, now), syncedAt: now } };
+  return null;
+}
+
+// The headline in two or three short sentences; the rest is on screen.
+function dashboardSay(d: Dashboard, now: number): string {
+  const total = d.more ? 'more than five hundred open incidents' : plural(d.total, 'open incident');
+  const open = d.total ? `Right now there ${d.total === 1 && !d.more ? 'is' : 'are'} ${total}, ${d.critical} critical, ${d.unassigned} unassigned and ${d.onHold} on hold.` : 'Right now there are no open incidents.';
+  const flow = `${d.openedToday || 'None'} came in today and ${d.resolvedToday || 'none'} ${d.resolvedToday === 1 ? 'was' : 'were'} resolved today.`;
+  const oldest = d.oldest ? ` The oldest was opened ${incidentAge(d.oldest.openedAt, now)}.` : '';
+  return `${open} ${flow}${oldest} It's all on your screen.`;
+}
+
 const showDashboard = tool<{ open: Result<DeskIncident[]>; activity: Result<Activity> }>({
   name: 'showDashboard',
-  description: "The service desk at a glance, shown as a dashboard on the engineer's screen: open, critical and unassigned incidents, new today, resolved this week, open incidents by priority and by team, and new incidents per day for the last seven days.",
+  description: "The service desk at a glance, shown as a dashboard on the engineer's screen: open, critical, unassigned, in progress and on hold incidents, new and resolved today, resolved this week, average time to resolve, the oldest open incident, open incidents by state, priority and team, and new and resolved incidents per day for the last seven days.",
   params: {},
   personas: IT,
   minutesSaved: 2,
   async effect({ now, deps }) {
-    const [open, activity] = await Promise.all([deps.desk.listOpen({ sort: 'priority' }, COUNT_LIMIT + 1), deps.desk.activity(weekStart(now))]);
+    const [open, activity] = await dashboardReads(deps.desk, now);
     return { open, activity };
   },
   run({ state, now, effect }) {
     const failed = !effect ? { kind: 'network' as const } : !effect.open.ok ? effect.open.error : !effect.activity.ok ? effect.activity.error : null;
     if (!effect || failed || !effect.open.ok || !effect.activity.ok) return failureOutcome('Dashboard unavailable', 'queue_unavailable', failed ?? { kind: 'network' }, 'build the dashboard');
-    const d = buildDashboard(effect.open.value.slice(0, COUNT_LIMIT), effect.open.value.length > COUNT_LIMIT, effect.activity.value, now);
+    const d = dashboardOf(effect.open.value, effect.activity.value, now);
     state.itdesk.board = { kind: 'dashboard', at: now, ...d };
-    const [top, next] = d.byTeam.filter((t) => t.label !== 'No group' && t.label !== 'Other');
-    const busiest = top && (!next || top.count > next.count) ? ` The busiest team is ${top.label} with ${plural(top.count, 'open incident')}.` : '';
-    const total = d.more ? `more than five hundred open incidents` : plural(d.total, 'open incident');
-    const say = `Here's the desk right now: ${total}, ${d.critical} critical and ${d.unassigned} unassigned. ${d.openedToday} came in today and ${d.resolvedWeek} ${d.resolvedWeek === 1 ? 'was' : 'were'} resolved this week.${busiest} It's all on your screen.`;
-    return { title: `Dashboard: ${plural(d.total, 'open incident')}`, result: ok(say, { ...d }) };
+    return { title: `Dashboard: ${plural(d.total, 'open incident')}`, result: ok(dashboardSay(d, now), { ...d }) };
   },
 });
 
@@ -177,11 +239,6 @@ const showImpact = tool({
   },
 });
 
-function limitOf(raw: string): number {
-  const n = Number(spokenDigits(raw)) || 5;
-  return Math.min(8, Math.max(1, n));
-}
-
 type Target = { kind: 'number'; number: string } | { kind: 'words'; words: string[] } | { kind: 'invalid' } | { kind: 'none' };
 
 // A spoken number, a position in the last list, the open incident, or search words.
@@ -191,7 +248,7 @@ function target(state: SessionState, raw: string): Target {
   if (!q || /^(it|this one|that one|this|that|current)$/.test(q)) return state.itdesk.current ? { kind: 'number', number: state.itdesk.current.number } : { kind: 'none' };
   const position = ORDINALS.findIndex((o) => new RegExp(`\\b${o}\\b`).test(q));
   const digits = spokenDigits(q);
-  const index = position >= 0 ? position : /^\d$/.test(digits) ? Number(digits) - 1 : -1;
+  const index = position >= 0 ? position : /^\d{1,2}$/.test(digits) ? Number(digits) - 1 : -1;
   if (index >= 0 && state.itdesk.queue[index]) return { kind: 'number', number: state.itdesk.queue[index].number };
   if (digits.length >= 4) {
     const number = parseTicketNumber(q);

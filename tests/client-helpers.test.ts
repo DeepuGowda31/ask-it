@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { cleanSpokenText, describeMicError, capTranscript, formatCountdown, formatHours, formatRate, ticketQueue, ageLabel, holdLabel, priorityTone, alertProblem, introDue, withTimeout } from '@/lib/client/helpers';
+import { cleanSpokenText, describeMicError, capTranscript, formatCountdown, formatHours, formatRate, ticketQueue, ageLabel, durationLabel, holdLabel, priorityTone, alertProblem, introDue, withTimeout } from '@/lib/client/helpers';
 import { MINUTE } from '@/lib/domain/time';
 import { NOW } from './helpers';
 
@@ -118,6 +118,12 @@ describe('IT desk labels', () => {
     expect(ageLabel(NOW - 15 * MINUTE, NOW)).toBe('15m');
     expect(ageLabel(NOW - 180 * MINUTE, NOW)).toBe('3h');
     expect(ageLabel(NOW - 2 * 24 * 60 * MINUTE - MINUTE, NOW)).toBe('2d');
+  });
+  it('shows a time to resolve with one decimal in hours or days', () => {
+    expect(durationLabel(45 * MINUTE)).toBe('45m');
+    expect(durationLabel(16.2 * 60 * MINUTE)).toBe('16.2h');
+    expect(durationLabel(3 * 60 * MINUTE)).toBe('3h');
+    expect(durationLabel(77 * 60 * MINUTE)).toBe('3.2d');
   });
   it('names ServiceNow hold reasons', () => {
     expect(holdLabel('4')).toBe('awaiting vendor');

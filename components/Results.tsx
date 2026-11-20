@@ -2,7 +2,7 @@
 
 import { Priority, QueueList } from './ItDesk';
 import type { StateView } from '@/lib/client/useSessionState';
-import { formatHours, formatRate } from '@/lib/client/helpers';
+import { ageLabel, durationLabel, formatHours, formatRate } from '@/lib/client/helpers';
 import { timeOfDay } from '@/lib/client/format';
 
 type Board = NonNullable<StateView['itdesk']['board']>;
@@ -25,16 +25,17 @@ function Head({ title, meta }: { title: string; meta: string }) {
 type Row = { label: string; count: number };
 
 // One bar per bucket; the count is printed, the bar only shows proportion, and an empty bucket draws no bar.
-function BarList({ title, rows }: { title: string; rows: Row[] }) {
+// `bad` marks the rows whose bar means trouble, such as Critical.
+function BarList({ title, rows, bad = [] }: { title: string; rows: Row[]; bad?: string[] }) {
   const max = Math.max(1, ...rows.map((g) => g.count));
   return (
     <figure className="wc-bars" aria-label={title}>
       <figcaption className="wc-label">{title}</figcaption>
       <ol>
         {rows.map((g) => (
-          <li key={g.label} title={`${g.label}: ${g.count}`}>
+          <li key={g.label} title={`${g.label} ${g.count}`}>
             <span className="min-w-0 truncate">{g.label}</span>
-            <span className="wc-bar-track">{g.count ? <span className="wc-bar" style={{ width: `${(g.count / max) * 100}%` }} /> : null}</span>
+            <span className="wc-bar-track">{g.count ? <span className="wc-bar" data-tone={bad.includes(g.label) ? 'bad' : undefined} style={{ width: `${(g.count / max) * 100}%` }} /> : null}</span>
             <span className="wc-num text-right">{g.count}</span>
           </li>
         ))}
@@ -43,18 +44,45 @@ function BarList({ title, rows }: { title: string; rows: Row[] }) {
   );
 }
 
-// New incidents per day as columns, oldest on the left.
-function DayColumns({ days }: { days: Dashboard['days'] }) {
-  const max = Math.max(1, ...days.map((d) => d.opened));
+const STATE_TONE: Record<string, string | undefined> = { New: 'muted', 'In Progress': 'info', 'On Hold': 'warn' };
+
+// Open work split by state in one bar; the legend carries the numbers.
+function StateBar({ rows }: { rows: Row[] }) {
+  const total = rows.reduce((n, r) => n + r.count, 0);
   return (
-    <figure className="wc-columns" aria-label="New incidents per day, last 7 days">
-      <figcaption className="wc-label">New incidents per day</figcaption>
+    <figure className="wc-stack" aria-label="Open by state">
+      <figcaption className="wc-label">Open by state</figcaption>
+      <div className="wc-stack-bar" aria-hidden="true">
+        {total ? rows.filter((r) => r.count).map((r) => <span key={r.label} data-tone={STATE_TONE[r.label]} style={{ flexGrow: r.count }} title={`${r.label} ${r.count}`} />) : null}
+      </div>
+      <ul className="wc-legend">
+        {rows.map((r) => (
+          <li key={r.label}><span className="wc-key" data-tone={STATE_TONE[r.label]} aria-hidden="true" />{r.label}<span className="wc-num">{r.count}</span></li>
+        ))}
+      </ul>
+    </figure>
+  );
+}
+
+// New and resolved incidents per day, oldest on the left; the legend carries the week totals.
+function DayColumns({ days }: { days: Dashboard['days'] }) {
+  const max = Math.max(1, ...days.flatMap((d) => [d.opened, d.resolved]));
+  const sum = (key: 'opened' | 'resolved') => days.reduce((n, d) => n + d[key], 0);
+  return (
+    <figure className="wc-columns" aria-label="New and resolved incidents per day, last 7 days">
+      <figcaption className="wc-label">Last 7 days</figcaption>
+      <ul className="wc-legend">
+        <li><span className="wc-key" data-tone="info" aria-hidden="true" />New<span className="wc-num">{sum('opened')}</span></li>
+        <li><span className="wc-key" data-tone="muted" aria-hidden="true" />Resolved<span className="wc-num">{sum('resolved')}</span></li>
+      </ul>
       <ol>
         {days.map((d) => (
-          <li key={d.label} title={`${d.label}: ${d.opened} new`}>
-            <span className="wc-num">{d.opened}</span>
-            <span className="wc-column-track">{d.opened ? <span className="wc-column" style={{ height: `${(d.opened / max) * 100}%` }} /> : null}</span>
-            <span className="wc-column-day">{d.label}</span>
+          <li key={d.label} title={`${d.label} ${d.opened} new ${d.resolved} resolved`} aria-label={`${d.label}, ${d.opened} new, ${d.resolved} resolved`}>
+            <span className="wc-column-track">
+              <span className="wc-column" data-empty={!d.opened} style={{ height: `${(d.opened / max) * 100}%` }} />
+              <span className="wc-column" data-tone="muted" data-empty={!d.resolved} style={{ height: `${(d.resolved / max) * 100}%` }} />
+            </span>
+            <span className="wc-column-day">{d.label.split(' ')[0]}</span>
           </li>
         ))}
       </ol>
@@ -62,30 +90,48 @@ function DayColumns({ days }: { days: Dashboard['days'] }) {
   );
 }
 
-function DashboardView({ d }: { d: Dashboard }) {
-  const tiles: { value: string; label: string; tone?: 'bad' | 'warn' }[] = [
-    { value: d.more ? `${d.total}+` : String(d.total), label: 'Open incidents' },
-    { value: String(d.critical), label: 'Critical', tone: d.critical ? 'bad' : undefined },
-    { value: String(d.unassigned), label: 'Unassigned', tone: d.unassigned ? 'warn' : undefined },
-    { value: String(d.openedToday), label: 'New today' },
-    { value: String(d.resolvedWeek), label: 'Resolved, last 7 days' },
+type Stat = { value: string; label: string; sub?: string; tone?: 'bad' | 'warn' };
+
+function Stats({ stats, size, label }: { stats: Stat[]; size: 'lg' | 'sm'; label: string }) {
+  return (
+    <ul className="wc-stats" data-size={size} aria-label={label}>
+      {stats.map((t) => (
+        <li key={t.label} data-tone={t.tone}>
+          <span className="wc-stat-label">{t.tone ? <span className="wc-dot" aria-hidden="true" /> : null}{t.label}</span>
+          <strong>{t.value}</strong>
+          {t.sub ? <span className="wc-stat-sub">{t.sub}</span> : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function DashboardView({ d, now }: { d: Dashboard; now: number }) {
+  const n = (v: number) => String(v);
+  const queue: Stat[] = [
+    { value: d.more ? `${d.total}+` : n(d.total), label: 'Open incidents', sub: `${d.inProgress} in progress` },
+    { value: n(d.critical), label: 'Critical', tone: d.critical ? 'bad' : undefined },
+    { value: n(d.unassigned), label: 'Unassigned', tone: d.unassigned ? 'warn' : undefined },
+    { value: n(d.onHold), label: 'On hold', sub: 'Blocked', tone: d.onHold ? 'warn' : undefined },
+    { value: d.oldest ? ageLabel(d.oldest.openedAt, now) : 'None', label: 'Oldest open', sub: d.oldest?.number },
+  ];
+  const flow: Stat[] = [
+    { value: n(d.openedToday), label: 'New today' },
+    { value: n(d.resolvedToday), label: 'Resolved today' },
+    { value: n(d.resolvedWeek), label: 'Resolved, last 7 days' },
+    { value: d.avgResolve ? durationLabel(d.avgResolve.ms) : 'None', label: 'Avg time to resolve', sub: d.avgResolve ? `Last 7 days, ${d.avgResolve.count} ${d.avgResolve.count === 1 ? 'incident' : 'incidents'}` : 'Last 7 days' },
   ];
   return (
     <div className="wc-dash">
-      <ul className="wc-dash-tiles">
-        {tiles.map((t) => (
-          <li key={t.label}>
-            <strong>{t.value}</strong>
-            <span className="wc-status" data-tone={t.tone}>{t.tone ? <span className="wc-dot" aria-hidden="true" /> : null}{t.label}</span>
-          </li>
-        ))}
-      </ul>
+      <Stats stats={queue} size="lg" label="Open queue" />
+      <Stats stats={flow} size="sm" label="Flow" />
       <div className="wc-dash-grid">
         <div className="wc-dash-col">
-          <BarList title="Open by priority" rows={d.byPriority} />
-          <DayColumns days={d.days} />
+          <StateBar rows={d.byState} />
+          <BarList title="Open by priority" rows={d.byPriority} bad={['Critical']} />
         </div>
         <BarList title="Open by team" rows={d.byTeam} />
+        <DayColumns days={d.days} />
       </div>
     </div>
   );
@@ -178,9 +224,9 @@ function PersonDetail({ person, asOf }: { person: Person; asOf: string }) {
           ))}
         </ul>
       ) : (
-        <p className="wc-muted">No open tickets: free to take new work.</p>
+        <p className="wc-muted">No open tickets, free to take new work.</p>
       )}
-      <p className="wc-person-hint"><span className="min-w-0 truncate">Say: <q>assign it to {person.name.split(' ')[0]}</q></span><span className="wc-faint ml-auto whitespace-nowrap text-[12px]">{asOf}</span></p>
+      <p className="wc-person-hint"><span className="min-w-0 truncate">Say <q>assign it to {person.name.split(' ')[0]}</q></span><span className="wc-faint ml-auto whitespace-nowrap text-[12px]">{asOf}</span></p>
     </>
   );
 }
@@ -189,7 +235,7 @@ function PersonDetail({ person, asOf }: { person: Person; asOf: string }) {
 export function Results({ view, now }: { view: StateView; now: number }) {
   const board = view.itdesk.board;
   if (!board) return null;
-  const asOf = `as of ${timeOfDay(board.at)}`;
+  const asOf = `as of ${timeOfDay('syncedAt' in board && board.syncedAt ? board.syncedAt : board.at)}`;
   if (board.kind === 'impact') {
     return (
       <section key={board.at} className="wc-result wc-enter" aria-label="ASK IT impact">
@@ -217,7 +263,7 @@ export function Results({ view, now }: { view: StateView; now: number }) {
     return (
       <section key={board.at} className="wc-result wc-enter" aria-label="Service desk dashboard">
         <Head title="Service desk overview" meta={`${view.integrations.tickets === 'live' ? 'Live from ServiceNow' : 'Simulated ServiceNow'} · ${asOf}`} />
-        <DashboardView d={board} />
+        <DashboardView d={board} now={now} />
       </section>
     );
   }

@@ -6,7 +6,7 @@ import { alertDeliverer, settleDeliveries } from '@/lib/server/deliveries';
 import type { Alert } from '@/lib/domain/types';
 import type { Delivery } from '@/lib/integrations/types';
 import { notifyChannel } from '@/lib/integrations/notify';
-import { buildDeps, integrationModes, seedOptions } from '@/lib/server/deps';
+import { buildDeps, integrationModes, outageIncident, seedOptions } from '@/lib/server/deps';
 import { success } from '@/lib/integrations/http';
 import { ServiceNowTickets } from '@/lib/integrations/servicenow';
 import { ServiceNowKnowledge, SimulatedKnowledge } from '@/lib/integrations/servicenow-kb';
@@ -207,13 +207,18 @@ describe('deps', () => {
     expect(buildDeps(freshState(), NOW, SN).knowledge).toBeInstanceOf(ServiceNowKnowledge);
   });
   it('seeds live sessions without simulated data', async () => {
-    expect(seedOptions({})).toEqual({ tickets: 'simulated', outageIncident: undefined });
-    expect(seedOptions({ ...SN, SERVICENOW_OUTAGE_INCIDENT: ' INC0020001 ' })).toEqual({ tickets: 'live', outageIncident: 'INC0020001' });
+    expect(seedOptions({})).toEqual({ tickets: 'simulated' });
+    expect(seedOptions({ ...SN, SERVICENOW_OUTAGE_INCIDENT: ' INC0020001 ' })).toEqual({ tickets: 'live' });
+    expect(outageIncident({ ...SN, SERVICENOW_OUTAGE_INCIDENT: ' INC0020001 ' })).toBe('INC0020001');
+    expect(outageIncident({ ...SN, SERVICENOW_OUTAGE_INCIDENT: 'INC1^x' })).toBeUndefined();
+    expect(outageIncident({ SERVICENOW_OUTAGE_INCIDENT: 'INC0020001' })).toBeUndefined();
     const store = new MemoryStore();
-    const code = await createSession(store, NOW, seedOptions(SN));
+    const code = await createSession(store, NOW, seedOptions({ ...SN, ...A0, SERVICENOW_OUTAGE_INCIDENT: 'INC0020001' }));
     const { state } = (await loadSession(store, code))!;
     expect(state.tickets).toEqual([]);
     expect(state.outages).toEqual([]);
+    expect(state.itdesk.backlog).toEqual([]);
+    expect(state.account).toMatchObject({ email: 'e@x', userId: null, locked: null, factorsKnown: false, source: 'live' });
   });
   it('gives every outbound call in one tool run a shared deadline well under 10 s', async () => {
     const f = vi.fn(async () => new Response('{}'));

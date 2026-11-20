@@ -43,14 +43,21 @@ export function buildDeps(state: SessionState, now: number, env: Env = process.e
   return {
     tickets: tickets ? new ServiceNowTickets(tickets, http) : new SimulatedTickets(state),
     identity: identity ? new Auth0Identity(identity, http) : new SimulatedIdentity(state),
-    desk: tickets ? new ServiceNowDesk(tickets, http, queueWindowDays(env)) : new SimulatedDesk(state),
+    desk: tickets ? new ServiceNowDesk(tickets, http, queueWindowDays(env)) : new SimulatedDesk(state, now),
     knowledge: tickets ? new ServiceNowKnowledge(tickets, http) : new SimulatedKnowledge(),
     status: statusChecker(),
     notifyMode: hasWebhook(env) ? 'live' : 'simulated',
   };
 }
 
-// Live ServiceNow never gets simulated tickets; its outage needs a real incident.
+// Live ServiceNow never gets simulated tickets, and live Auth0 never a seeded account.
 export function seedOptions(env: Env = process.env): SeedOptions {
-  return { tickets: serviceNowConfig(env) ? 'live' : 'simulated', outageIncident: env.SERVICENOW_OUTAGE_INCIDENT?.trim() || undefined };
+  const identity = auth0Config(env);
+  return { tickets: serviceNowConfig(env) ? 'live' : 'simulated', ...(identity ? { liveIdentity: { email: identity.email } } : {}) };
+}
+
+// Live only: the real master incident of the internal outage, read from ServiceNow.
+export function outageIncident(env: Env = process.env): string | undefined {
+  const number = env.SERVICENOW_OUTAGE_INCIDENT?.trim();
+  return serviceNowConfig(env) && number && /^INC\d{7}$/.test(number) ? number : undefined;
 }

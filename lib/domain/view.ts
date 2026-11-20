@@ -3,7 +3,7 @@ import { findAsset } from './assets';
 import { MAX_CODE_ATTEMPTS } from './company';
 import { findArticle } from './kb';
 import { searchKnowledge } from './search';
-import { serviceName } from './services';
+import { outageName } from './services';
 import { isOpen } from './tickets';
 import { verificationStatus } from './tools/identity';
 import { ITDESK_TOOLS } from './tools/itdesk';
@@ -104,7 +104,7 @@ function topIssues(state: SessionState, limit = 5) {
   if (fix && !fix.ticket) {
     signals.push({ topic: articleTitle(fix.articleId), status: fix.status === 'fixed' ? 'fixed' : 'open', at: fix.log.at(-1)?.at ?? fix.startedAt });
   }
-  for (const o of state.outages) if (o.followed) signals.push({ topic: serviceName(o.service), status: 'outage', at: o.since });
+  for (const o of state.outages) if (o.followed) signals.push({ topic: outageName(o), status: 'outage', at: o.since ?? state.createdAt });
   for (const a of state.pending) {
     if (a.payload.kind === 'account' && a.status === 'done') signals.push({ topic: articleTitle(ACCOUNT_ARTICLE[a.payload.action]), status: 'fixed', at: a.createdAt });
   }

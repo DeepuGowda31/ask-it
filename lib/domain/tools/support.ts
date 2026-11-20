@@ -4,7 +4,7 @@ import type { LiveStatus, NewTicket } from '@/lib/integrations/types';
 import { issueMilestone } from '../cards';
 import { ARTICLES, findArticle, type Article } from '../kb';
 import { confident, rankKnowledge, searchKnowledge, tokenize } from '../search';
-import { SERVICES, findService, serviceName } from '../services';
+import { SERVICES, findService, outageName } from '../services';
 import { clip, echo, parseTicketNumber, spokenTicket, ticketDescription } from '../tickets';
 import type { Outage, SessionState } from '../types';
 import { failed, ok, plural, prepare, tool, type Outcome } from './shared';
@@ -27,7 +27,8 @@ function liveSay(name: string, live: LiveStatus): string {
 
 function outageSay(o: Outage): string {
   const follow = o.followed ? "You're already on that incident, so you'll get updates." : 'I can add you to that incident instead of raising a duplicate ticket.';
-  return `Yes, there's a known outage: ${o.title}. IT is tracking it as ${spokenTicket(o.incident)}, with ${o.affected} people affected. ${follow}`;
+  const affected = o.affected === null ? '' : `, with ${o.affected} people affected`;
+  return `Yes, there's a known outage: ${o.title}. IT is tracking it as ${spokenTicket(o.incident)}${affected}. ${follow}`;
 }
 
 const checkServiceStatus = tool<LiveStatus>({
@@ -81,7 +82,7 @@ const followOutage = tool({
     }
     const spoken = spokenTicket(outage.incident);
     if (outage.followed) return { title: `Already following ${outage.incident}`, result: ok(`You're already on ${spoken}, so you'll get an update when it's fixed.`, { alreadyFollowing: true }) };
-    const lead = `Shall I add you to the ${serviceName(outage.service).replace(/^the /, '')} outage, ${spoken}, as affected?`;
+    const lead = `Shall I add you to the ${outageName(outage).replace(/^the /, '')} outage, ${spoken}, as affected?`;
     return prepare(state, now, { kind: 'outage', incident: outage.incident }, `Join outage ${outage.incident} as affected: ${outage.title}`, [], lead);
   },
 });

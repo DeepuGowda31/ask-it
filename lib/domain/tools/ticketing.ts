@@ -3,7 +3,7 @@ import type { Level, Mode, OpenTicket, RemoteTicket } from '@/lib/integrations/t
 import { findAsset } from '../assets';
 import { issueMilestone, ticketMilestone } from '../cards';
 import { findArticle } from '../kb';
-import { mentionsService, serviceName } from '../services';
+import { mentionsService, outageName } from '../services';
 import { mergeTickets } from '../followup';
 import { clip, echo, findTicket, isOpen, parseTicketNumber, spokenTicket, ticketDescription } from '../tickets';
 import type { SessionState, TicketRecord } from '../types';
@@ -24,7 +24,7 @@ function ticketWarnings(state: SessionState, text: string): string[] {
   }
   for (const o of state.outages) {
     if (article?.service === o.service || mentionsService(text, o.service)) {
-      warnings.push(`This looks like the known ${serviceName(o.service)} outage, ${spokenTicket(o.incident)}. I can add you to it instead, which avoids a duplicate ticket.`);
+      warnings.push(`This looks like the known ${outageName(o)} outage, ${spokenTicket(o.incident)}. I can add you to it instead, which avoids a duplicate ticket.`);
     }
   }
   return warnings;

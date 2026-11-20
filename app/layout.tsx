@@ -10,7 +10,7 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: 'ASK IT',
-  description: "Voice IT helpdesk: tell IT what's wrong and most issues get fixed on the call, with a live IT dashboard.",
+  description: "Voice IT helpdesk. Tell IT what's wrong and most issues get fixed on the call.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

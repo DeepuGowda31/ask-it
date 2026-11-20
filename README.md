@@ -48,7 +48,7 @@ builds into a separate folder while another server runs from `.next`.
 | `SERVICENOW_INSTANCE_URL`, `SERVICENOW_USER`, `SERVICENOW_PASSWORD`, `SERVICENOW_CALLER_EMAIL` | no | All four switch tickets to the live ServiceNow Table API (Basic auth). Unset: simulated tickets |
 | `SERVICENOW_CLOSE_CODE` | no | Resolution code for incidents ASK IT resolves. Default `Resolved – Permanent Fix Applied` (en dash) |
 | `SERVICENOW_QUEUE_DAYS` | no | IT desk reads only incidents opened in the last N days. Default 30; 0 reads the whole queue |
-| `SERVICENOW_OUTAGE_INCIDENT` | no | Live mode only: a real master incident (such as `INC0010123`) for the seeded SAP Concur outage. Unset: no internal outage in live mode |
+| `SERVICENOW_OUTAGE_INCIDENT` | no | Live mode only: a real master incident (such as `INC0010123`) for the internal outage; its title and start time are read from ServiceNow when a session is created and before each call, and no affected count is claimed. Unset: no internal outage in live mode |
 | `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET` | no | Auth0 Management API (machine-to-machine app). MFA methods come from `authentication-methods`; if the tenant refuses, they are reported as unknown |
 | `AUTH0_OTP_CLIENT_ID`, `AUTH0_OTP_CLIENT_SECRET` | no | Regular web app with the Passwordless OTP grant, for email codes |
 | `AUTH0_USER_EMAIL` | no | The demo employee in Auth0. All six `AUTH0_*` switch identity to live; unset: simulated |
@@ -211,8 +211,9 @@ progress), and one active internal outage: SAP Concur expense submissions failin
 INC0011950, 14 affected. VPN has no outage, so a VPN problem goes through guided troubleshooting. In
 simulated mode new tickets are numbered from INC0012001 and the emailed code is shown on screen as a
 simulated inbox (never in tool results the agent sees). In live ticket mode no simulated tickets are seeded,
-and the outage exists only when `SERVICENOW_OUTAGE_INCIDENT` names a real incident. `/api/state` masks the
-employee's email.
+and the outage exists only while the open incident `SERVICENOW_OUTAGE_INCIDENT` names says so in ServiceNow. With live
+Auth0 the account starts unknown and is read from Auth0 when the session is created and before each call; if
+that read fails the Account card says so instead of showing values. `/api/state` masks the employee's email.
 
 ## Tests
 

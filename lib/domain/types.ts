@@ -18,12 +18,15 @@ export interface Employee {
 interface Account {
   email: string;
   userId: string | null;
-  locked: boolean;
+  // null until Auth0 has been read: a live account is never guessed.
+  locked: boolean | null;
   lastPasswordReset: number | null;
   factors: string[];
   factorsKnown: boolean;
   source: Mode;
   checkedAt: number | null;
+  // The first read from Auth0 failed, so nothing above is known.
+  readFailed?: boolean;
 }
 
 export type VerificationStatus = 'none' | 'pending' | 'approved' | 'expired' | 'failed';
@@ -79,11 +82,13 @@ export interface TicketRecord {
 
 export interface Outage {
   id: string;
+  // Internal service key, or '' when the incident names none.
   service: string;
   title: string;
   incident: string;
-  affected: number;
-  since: number;
+  // null when ServiceNow gives no count to say.
+  affected: number | null;
+  since: number | null;
   followed: boolean;
   syncFailed?: boolean;
 }
@@ -248,11 +253,12 @@ export type ResourceStatus = 'available' | 'busy' | 'all';
 export type PersonCard = Omit<Resource, 'id'>;
 
 // What the IT dashboard shows for the engineer's last question: a list, a count, ASK IT's impact, or people.
+// `query` is the list or count filters as asked, and `syncedAt` the last time ServiceNow was read again for it.
 type DeskBoard =
-  | { kind: 'list'; title: string; total: number; more: boolean; at: number }
-  | { kind: 'count'; title: string; total: number; more: boolean; groupBy: GroupBy | null; groups: { label: string; count: number }[]; at: number }
+  | { kind: 'list'; title: string; total: number; more: boolean; at: number; query?: Record<string, string>; syncedAt?: number }
+  | { kind: 'count'; title: string; total: number; more: boolean; groupBy: GroupBy | null; groups: { label: string; count: number }[]; at: number; query?: Record<string, string>; syncedAt?: number }
   | { kind: 'impact'; at: number }
-  | ({ kind: 'dashboard'; at: number } & Dashboard)
+  | ({ kind: 'dashboard'; at: number; syncedAt?: number } & Dashboard)
   // Counts cover the whole team; people are the ones shown.
   | { kind: 'people'; title: string; status: ResourceStatus; available: number; busy: number; people: PersonCard[]; at: number }
   | { kind: 'person'; person: PersonCard; at: number };

@@ -6,8 +6,8 @@ import type { Outage, SessionState, TicketRecord } from './types';
 
 export interface SeedOptions {
   tickets: Mode;
-  // Real master incident for the internal outage in live mode.
-  outageIncident?: string;
+  // Set when Auth0 is live: the account starts unknown and is read from Auth0.
+  liveIdentity?: { email: string };
 }
 
 const simTickets = (now: number): TicketRecord[] => [
@@ -15,31 +15,29 @@ const simTickets = (now: number): TicketRecord[] => [
   { number: 'INC0011987', sysId: 'sim-INC0011987', summary: 'Outlook calendar not syncing', state: 'Resolved', urgency: 3, source: 'simulated', createdAt: now - 6 * DAY, updatedAt: now - 5 * DAY },
 ];
 
-const concurOutage = (incident: string, now: number): Outage => ({ id: 'OUT-1', service: 'concur', title: 'SAP Concur expense submissions failing', incident, affected: 14, since: now - 95 * MINUTE, followed: false });
+const simOutage = (now: number): Outage => ({ id: 'OUT-1', service: 'concur', title: 'SAP Concur expense submissions failing', incident: 'INC0011950', affected: 14, since: now - 95 * MINUTE, followed: false });
 
-// Live mode never gets simulated tickets; the outage only exists there when a real incident backs it.
-function outagesFor(seed: SeedOptions, now: number): Outage[] {
-  if (seed.tickets === 'simulated') return [concurOutage('INC0011950', now)];
-  return seed.outageIncident && /^INC\d{7}$/.test(seed.outageIncident) ? [concurOutage(seed.outageIncident, now)] : [];
-}
+const simAccount = (now: number): SessionState['account'] => ({
+  email: EMPLOYEE.email,
+  userId: 'auth0|sim-priya',
+  // Locked so the unlock story works in simulated mode.
+  locked: true,
+  lastPasswordReset: now - 83 * DAY,
+  factors: ['otp'],
+  factorsKnown: true,
+  source: 'simulated',
+  checkedAt: null,
+});
 
-// Fictional demo data. Each session gets its own copy, so several demos can run at once.
+const unknownAccount = (email: string): SessionState['account'] => ({ email, userId: null, locked: null, lastPasswordReset: null, factors: [], factorsKnown: false, source: 'live', checkedAt: null });
+
+// Fictional demo data in simulated mode; live parts start empty or unknown. Each session gets its own copy, so several demos can run at once.
 export function createSessionState(id: string, now: number, seed: SeedOptions = { tickets: 'simulated' }): SessionState {
   return {
     id,
     createdAt: now,
     employee: structuredClone(EMPLOYEE),
-    account: {
-      email: EMPLOYEE.email,
-      userId: 'auth0|sim-priya',
-      // Locked so the unlock story works in simulated mode.
-      locked: true,
-      lastPasswordReset: now - 83 * DAY,
-      factors: ['otp'],
-      factorsKnown: true,
-      source: 'simulated',
-      checkedAt: null,
-    },
+    account: seed.liveIdentity ? unknownAccount(seed.liveIdentity.email) : simAccount(now),
     verification: { status: 'none', sentAt: null, approvedAt: null, expiresAt: null, attempts: 0, checking: [], simulatedCode: null },
     troubleshooting: null,
     lastResolution: null,
@@ -49,7 +47,8 @@ export function createSessionState(id: string, now: number, seed: SeedOptions = 
     followUp: null,
     itdesk: { queue: [], current: null, lastUpdate: null, board: null, backlog: seed.tickets === 'simulated' ? seedBacklog(now) : [] },
     tickets: seed.tickets === 'simulated' ? simTickets(now) : [],
-    outages: outagesFor(seed, now),
+    // Live: the outage is read from its ServiceNow incident (lib/domain/sync.ts), never seeded.
+    outages: seed.tickets === 'simulated' ? [simOutage(now)] : [],
     pending: [],
     documents: [],
     notifications: [],

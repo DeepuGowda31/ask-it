@@ -80,7 +80,7 @@ export class SimulatedIdentity implements IdentityAdapter {
 
   async getUser() {
     const a = this.state.account;
-    return success({ userId: a.userId ?? 'auth0|sim-priya', email: a.email, locked: a.locked, lastPasswordReset: a.lastPasswordReset, factors: a.factors, factorsKnown: a.factorsKnown });
+    return success({ userId: a.userId ?? 'auth0|sim-priya', email: a.email, locked: a.locked === true, lastPasswordReset: a.lastPasswordReset, factors: a.factors, factorsKnown: a.factorsKnown });
   }
 
   async sendCode() {
@@ -118,7 +118,10 @@ const plain = ({ notes: _notes, ...incident }: OpenIncident): DeskIncident => in
 export class SimulatedDesk implements DeskAdapter {
   readonly mode = 'simulated';
 
-  constructor(private state: SessionState) {}
+  constructor(
+    private state: SessionState,
+    private now = Date.now(),
+  ) {}
 
   private open() {
     return this.state.itdesk.backlog.filter((i) => ['1', '2', '3'].includes(i.state)).sort((a, b) => a.priority - b.priority || (a.openedAt ?? 0) - (b.openedAt ?? 0));
@@ -154,9 +157,13 @@ export class SimulatedDesk implements DeskAdapter {
     return success(DESK_USERS.filter((u) => ids.includes(u.id)).sort((a, b) => a.name.localeCompare(b.name)));
   }
 
-  // The simulated table keeps no resolution times, so only new incidents show in the daily bars.
+  // Resolutions are only those made in this session; the seeded table has none.
   async activity(since: number) {
-    return success({ opened: this.state.itdesk.backlog.map((i) => i.openedAt).filter((t): t is number => t !== null && t >= since), resolved: [] as number[] });
+    const backlog = this.state.itdesk.backlog;
+    return success({
+      opened: backlog.map((i) => i.openedAt).filter((t): t is number => t !== null && t >= since),
+      resolved: backlog.flatMap((i) => (i.resolvedAt && i.resolvedAt >= since ? [{ at: i.resolvedAt, openedAt: i.openedAt }] : [])),
+    });
   }
 
   async roster(teams: readonly string[]) {
@@ -179,6 +186,7 @@ export class SimulatedDesk implements DeskAdapter {
     if ('assignment_group' in fields) next.group = DESK_GROUPS.find((g) => g.id === fields.assignment_group) ?? null;
     if (fields.state) Object.assign(next, { state: fields.state, stateLabel: STATE_LABELS[fields.state] ?? fields.state });
     if (fields.state && fields.state !== '3') next.holdReason = null;
+    if (fields.state) next.resolvedAt = fields.state === '6' ? this.now : null;
     if (fields.hold_reason) next.holdReason = fields.hold_reason;
     if (fields.category) next.category = fields.category;
     if (fields.urgency) next.urgency = Number(fields.urgency) as Level;

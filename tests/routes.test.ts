@@ -213,7 +213,7 @@ describe('/api/tools/[name]', () => {
     expect(await blocked.json()).toMatchObject({ ok: false, error: 'not_available', say: "I can't do that in this call." });
     const ok = await tool('listQueue', { session_id: code, persona: 'itdesk', args });
     expect(ok.status).toBe(200);
-    expect((await ok.json()).say).toMatch(/^I found 3 critical incidents\. First,/);
+    expect((await ok.json()).say).toBe("Here are 3 critical incidents, 2 unassigned. They're on your screen. Want details on any of them?");
     expect((await tool('checkServiceStatus', { session_id: code, persona: 'itdesk', args: { service: 'vpn' } })).status).toBe(403);
     const state = await (await stateRoute(new NextRequest(`http://localhost/api/state?session=${code}`))).json();
     expect(state.itdesk.queue).toHaveLength(3);

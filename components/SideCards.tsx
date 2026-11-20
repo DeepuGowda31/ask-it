@@ -1,20 +1,19 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Activity, BellRing, CircleAlert, CircleCheck, CircleMinus, CircleX, Clock3, FileText, Mail, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Activity, CircleAlert, CircleCheck, CircleMinus, CircleX, Clock3, FileText, Mail, ShieldAlert, ShieldCheck } from 'lucide-react';
 import type { SessionView } from '@/lib/domain/view';
 import { formatCountdown, ticketQueue } from '@/lib/client/helpers';
 import { rightNow } from '@/lib/client/right-now';
 import { statusTone } from '@/lib/client/ticket-lines';
 import { dateLabel } from '@/lib/client/format';
-import { reminderLabel } from '@/lib/domain/reminders';
 
 type Mode = 'live' | 'simulated';
 
 // Live (with the system name) or Simulated.
 function ModeBadge({ mode, system }: { mode: Mode; system: string }) {
   return (
-    <span className="wc-chip" data-tone={mode === 'live' ? 'ok' : undefined} title={mode === 'live' ? `Connected to ${system}` : `${system} is simulated in this demo`}>
+    <span className="wc-chip" data-tone={mode === 'live' ? 'ok' : undefined} title={mode === 'live' ? `Connected to ${system}` : `${system} is simulated`}>
       <span className="wc-dot" aria-hidden="true" />
       {mode === 'live' ? `Live · ${system}` : 'Simulated'}
     </span>
@@ -47,6 +46,14 @@ const FACTOR: Record<string, string> = {
 };
 
 export function AccountCard({ account }: { account: SessionView['account'] }) {
+  // Live accounts are only shown as Auth0 read them.
+  if (account.locked === null) {
+    return (
+      <Card title="Account" meta={<ModeBadge mode={account.source} system="Auth0" />}>
+        <p className="wc-muted">{account.readFailed ? "Couldn't read your account from Auth0. ASK IT checks again when you call." : 'Reading your account from Auth0…'}</p>
+      </Card>
+    );
+  }
   return (
     <Card title="Account" meta={<ModeBadge mode={account.source} system="Auth0" />}>
       <dl className="wc-kv">
@@ -180,12 +187,9 @@ export function RightNowCard({ view, now, inCall }: { view: SessionView; now: nu
 
 const MAX_TICKETS = 5;
 
-// Open tickets first, then outages the employee follows, then closed ones; one line each. Waiting reminders follow.
-export function MyTickets({ view, now }: { view: SessionView; now: number }) {
-  const rows = [
-    ...view.outages.filter((o) => o.followed).map((o) => ({ number: o.incident, summary: o.title, status: 'Outage' })),
-    ...ticketQueue(view.tickets).map((t) => ({ number: t.number, summary: t.summary.replace(/^Resolved by ASK IT: /, ''), status: t.state })),
-  ];
+// The employee's tickets, open first, then closed ones; one line each.
+export function MyTickets({ view }: { view: SessionView }) {
+  const rows = ticketQueue(view.tickets).map((t) => ({ number: t.number, summary: t.summary.replace(/^Resolved by ASK IT: /, ''), status: t.state }));
   return (
     <Card title="My tickets" meta={<ModeBadge mode={view.integrations.tickets} system="ServiceNow" />}>
       {rows.length === 0 ? (
@@ -202,16 +206,6 @@ export function MyTickets({ view, now }: { view: SessionView; now: number }) {
         </ul>
       )}
       {rows.length > MAX_TICKETS ? <p className="wc-faint mt-2 text-[12px]">+{rows.length - MAX_TICKETS} more in the Inspector</p> : null}
-      {view.reminders.length ? (
-        <ul className="mt-2 grid gap-1" aria-label="Reminders">
-          {view.reminders.map((r) => (
-            <li key={r.id} className="flex items-center gap-2 text-[12px]">
-              <BellRing size={14} className="wc-tone-accent shrink-0" aria-hidden="true" />
-              <span className="min-w-0 truncate" title={r.about}>Reminder · {reminderLabel(r.at, now)} · about {r.about}</span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
     </Card>
   );
 }

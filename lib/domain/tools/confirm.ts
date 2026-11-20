@@ -6,7 +6,7 @@ import { HOLD_WORD } from './itdesk';
 import { deviceLabel } from '../company';
 import { mergeTickets } from '../followup';
 import { addTicket, clip, nextSimNumber, spokenTicket } from '../tickets';
-import { serviceName } from '../services';
+import { outageName } from '../services';
 import type { ActionPayload, Lockdown, LockdownStep, PendingAction, Persona, SessionState } from '../types';
 import { currentUser, identityFailure, lockdownTitle, verificationBlock } from './identity';
 import { alertSay, fail, failed, ok, tool, type Deps, type Outcome } from './shared';
@@ -129,7 +129,7 @@ async function commitEffect(state: SessionState, action: PendingAction, deps: De
     const escalated = await deps.tickets.escalate({ number: payload.number, sysId: payload.sysId }, payload.reason);
     return { kind: 'escalation', notifyMode: deps.notifyMode, escalated };
   }
-  if (payload.action === 'unlock' && !state.account.locked) return { kind: 'account', mode: deps.identity.mode, done: { ok: true, value: null }, notLocked: true };
+  if (payload.action === 'unlock' && state.account.locked === false) return { kind: 'account', mode: deps.identity.mode, done: { ok: true, value: null }, notLocked: true };
   const user = await currentUser(state, deps.identity);
   if (!user.ok) return { kind: 'account', mode: deps.identity.mode, done: user };
   const done = await deps.identity.lifecycle({ userId: user.value.userId, email: user.value.email }, payload.action);
@@ -378,9 +378,9 @@ function commitOutage(state: SessionState, action: PendingAction, incident: stri
     return failed(`Follow ${incident} not saved in ServiceNow`, 'follow_not_synced', say, undefined, RETRY_NEXT);
   }
   outage.followed = true;
-  outage.affected += 1;
+  if (outage.affected !== null) outage.affected += 1;
   delete outage.syncFailed;
-  const say = `Done. You're added to ${spoken} as affected, so you'll get updates when ${serviceName(outage.service)} is fixed, and no duplicate ticket is needed.`;
+  const say = `Done. You're added to ${spoken} as affected, so you'll get updates when ${outageName(outage)} is fixed, and no duplicate ticket is needed.`;
   const alert = issueMilestone(state, now, 'opened', `Linked to known outage ${incident}`, { title: `Affected by ${outage.title}`, fresh: true });
   return { title: `Following ${incident} · duplicate ticket avoided`, minutesSaved: 10, metrics: { duplicatesAvoided: 1 }, alerts: [alert], result: ok(say, { incident, affected: outage.affected }) };
 }
