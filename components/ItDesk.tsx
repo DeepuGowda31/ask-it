@@ -3,7 +3,7 @@
 import { BellRing, Check, Download, FileText, Mic, TriangleAlert } from 'lucide-react';
 import { BrandMark } from './Brand';
 import { Transcript } from './Transcript';
-import { CallBanners, CallDock, CallSignal } from './VoiceCall';
+import { AgentSticker, CallBanners, CallDock } from './VoiceCall';
 import type { StateView } from '@/lib/client/useSessionState';
 import type { VoiceCall } from '@/lib/client/useVoiceCall';
 import { ageLabel, formatCountdown, holdLabel, priorityTone } from '@/lib/client/helpers';
@@ -149,7 +149,7 @@ export function CallPanel({ call, now, catalog }: { call: VoiceCall; now: number
             </span>
             {call.phase === 'live' && call.deadline ? <span className="wc-num wc-muted text-[12px]">{formatCountdown(call.deadline - now)}</span> : null}
           </div>
-          <div className="wc-desk-signal"><CallSignal call={call} /></div>
+          <AgentSticker call={call} mark="operations" />
           <CallBanners call={call} />
           <div className="wc-desk-transcript">
             <Transcript catalog={catalog} messages={call.transcript} placeholder={call.phase === 'connecting' ? 'Connecting you to ASK IT…' : call.phase === 'ended' ? 'No conversation was recorded.' : 'Ask for the queue, or name an incident.'} />

@@ -18,7 +18,7 @@ const MARKS = {
   ),
 };
 
-type Mark = keyof typeof MARKS;
+export type Mark = keyof typeof MARKS;
 
 export function BrandMark({ mark = 'helpdesk', className = 'wc-brand-mark' }: { mark?: Mark; className?: string }) {
   return (

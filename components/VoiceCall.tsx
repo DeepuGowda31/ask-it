@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { Suspense, useRef, type ReactNode } from 'react';
 import { Loader2, Mic, MicOff, PhoneOff } from 'lucide-react';
 import { AgentSignal } from './AgentSignal';
+import { BrandMark, type Mark } from './Brand';
 import { ErrorBoundary } from './ErrorBoundary';
 import type { VoiceCall } from '@/lib/client/useVoiceCall';
 
@@ -51,6 +52,16 @@ export function CallSignal({ call }: { call: VoiceCall }) {
         <h2>{inCall ? call.caption : ''}</h2>
         {inCall && call.captionDetail ? <p>{call.captionDetail}</p> : null}
       </div>
+    </section>
+  );
+}
+
+// The agent's own sticker in place of the signal: its ring follows the call, speaking, listening or thinking.
+export function AgentSticker({ call, mark }: { call: VoiceCall; mark: Mark }) {
+  return (
+    <section className="wc-sticker" data-state={call.signalState} aria-label="Call activity">
+      <span className="wc-sticker-ring" aria-hidden="true"><BrandMark mark={mark} className="wc-sticker-mark" /></span>
+      <p className="wc-sticker-caption" role="status" aria-live="polite">{call.phase === 'idle' ? '' : call.caption}</p>
     </section>
   );
 }

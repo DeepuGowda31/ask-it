@@ -7,7 +7,7 @@ import { Drawer } from './Drawer';
 import { DocumentView } from './DocumentView';
 import { Transcript } from './Transcript';
 import { AccountCard, AskedTickets, DocumentList, MyTickets, RightNowCard, urgencyLabel } from './SideCards';
-import { CallBanners, CallDock, CallMount, CallSignal } from './VoiceCall';
+import { AgentSticker, CallBanners, CallDock, CallMount, CallSignal } from './VoiceCall';
 import { Faq } from './Faq';
 import { IncomingCall } from './IncomingCall';
 import { formatCountdown } from '@/lib/client/helpers';
@@ -210,7 +210,7 @@ export default function EmployeeApp({ setupWarning }: { setupWarning: string | n
                   <span className="wc-status" data-tone={status.tone} role="status"><span className="wc-dot" aria-hidden="true" /> {status.label}</span>
                   {phase === 'live' && deadline ? <span className="wc-num wc-faint" data-urgent={left < 60_000}>Ends in {formatCountdown(left)}</span> : null}
                 </div>
-                <div className="wc-emp-signal" aria-hidden="true"><CallSignal call={call} /></div>
+                <AgentSticker call={call} mark="helpdesk" />
                 <CallBanners call={call} />
                 <Transcript
                   catalog={catalog}
